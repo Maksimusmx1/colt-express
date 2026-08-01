@@ -369,7 +369,7 @@ private fun TrainView(
                     shape = RoundedCornerShape(6.dp),
                     border = BorderStroke(1.dp, if (car.index == 0) Color(0xFF6D4C41) else Color(0xFFB0BEC5)),
                 ) {
-                    Column(Modifier.width(96.dp).padding(6.dp)) {
+                    Column(Modifier.width(120.dp).padding(6.dp)) {
                         Text(
                             if (car.index == 0) "Локомотив" else "Вагон ${car.index}",
                             style = MaterialTheme.typography.labelSmall,
@@ -381,14 +381,14 @@ private fun TrainView(
                         car.inside.forEach { id ->
                             val who = charById[id] ?: id
                             Text(
-                                "▬ ${characterName(who)}${if (id == myId) " (вы)" else ""}",
+                                "${characterName(who)}${if (id == myId) " (вы)" else ""}: в вагоне",
                                 style = MaterialTheme.typography.labelSmall,
                             )
                         }
                         car.roof.forEach { id ->
                             val who = charById[id] ?: id
                             Text(
-                                "▲ ${characterName(who)}${if (id == myId) " (вы)" else ""}",
+                                "${characterName(who)}${if (id == myId) " (вы)" else ""}: на крыше",
                                 style = MaterialTheme.typography.labelSmall,
                             )
                         }
