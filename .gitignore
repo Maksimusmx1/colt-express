@@ -1,0 +1,22 @@
+# Gradle
+.gradle/
+.kotlin/
+**/build/
+
+# IDE
+.idea/
+*.iml
+
+# Android
+android/local.properties
+android/.cxx/
+android/captures/
+
+# Logs
+server-run.log
+server-run-err.log
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
