@@ -10,7 +10,7 @@ import kotlin.random.Random
 /**
  * Автосимуляция полной партии для проверки правил движка.
  * Политика бота: в планировании разыгрывает первую карту действия из руки (иначе добирает 3);
- * в "Разгоне" выбирает DRAW6; в ограблении всегда выбирает первый вариант выбора.
+ * в ограблении всегда выбирает первый вариант выбора.
  */
 object Sim {
 
@@ -47,10 +47,6 @@ object Sim {
                         if (res.first) println("  plan ${u.playerId} plays $cardType")
                         else println("  plan ${u.playerId} draws")
                         next += res.second
-                    }
-                    is EngineUpdate.PlanningChoice -> {
-                        println("  plan ${u.playerId} chooses ${u.choice.kind} -> ${u.choice.options.firstOrNull()}")
-                        next += engine.submitChoice(u.playerId, u.choice.choiceId, "DRAW6")
                     }
                     is EngineUpdate.Robbery -> {
                         for (ev in u.events) {

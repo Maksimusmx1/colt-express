@@ -3,6 +3,7 @@ package com.coltexpress.client
 import android.app.Application
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.provider.Settings
 import androidx.core.content.FileProvider
@@ -42,7 +43,10 @@ import com.coltexpress.client.protocol.Welcome
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -55,7 +59,9 @@ sealed interface ConnectionState {
     data object Connected : ConnectionState
 }
 
-const val BUILD_NUMBER = 3
+const val BUILD_NUMBER = 4
+
+private const val RECONNECT_DELAY_MS = 60_000L
 
 data class RoomInfo(
     val roomId: String,
@@ -93,6 +99,9 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     private var nickname = ""
 
     private var currentHost: String? = null
+
+    private var supervisorJob: Job? = null
+    private var eventsJob: Job? = null
 
     private val _room = MutableStateFlow<RoomInfo?>(null)
     val room: StateFlow<RoomInfo?> = _room.asStateFlow()
@@ -151,25 +160,19 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         nickname = newNickname.trim().ifEmpty { "anonymous" }
         val url = normalizeServerUrl(serverAddress)
         currentHost = url.removePrefix("ws://").removePrefix("wss://").substringBefore('/')
+        supervisorJob?.cancel()
+        eventsJob?.cancel()
+        client.disconnect()
         client = GameClient(url)
         _connection.value = ConnectionState.Connecting
-        viewModelScope.launch {
+        eventsJob = viewModelScope.launch {
             try {
                 client.events.collect { message -> handle(message) }
             } catch (e: Exception) {
                 addLog("Соединение потеряно: ${e.message}")
-            } finally {
-                _connection.value = ConnectionState.Disconnected
             }
         }
-        viewModelScope.launch {
-            try {
-                client.connect()
-            } catch (e: Exception) {
-                addLog("Не удалось подключиться: ${e.message}")
-                _connection.value = ConnectionState.Disconnected
-            }
-        }
+        supervisorJob = viewModelScope.launch { connectionSupervisor() }
         viewModelScope.launch {
             val serverBuild = client.fetchServerBuild()
             _serverBuild.value = serverBuild
@@ -177,6 +180,31 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 _updateAvailable.value = true
                 addLog("Доступна новая сборка клиента №$serverBuild (у вас $BUILD_NUMBER)")
             }
+        }
+    }
+
+    private suspend fun connectionSupervisor() {
+        var everConnected = false
+        var failureLogged = false
+        while (true) {
+            val opened = try {
+                client.connect()
+                true
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                false
+            }
+            _connection.value = ConnectionState.Disconnected
+            if (opened) everConnected = true
+            if (!failureLogged) {
+                failureLogged = true
+                addLog(
+                    if (everConnected) "Соединение с сервером потеряно. Повторная проверка каждую минуту."
+                    else "Сервер недоступен. Повторная проверка каждую минуту."
+                )
+            }
+            delay(RECONNECT_DELAY_MS)
         }
     }
 
@@ -245,7 +273,14 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                     Uri.parse("package:${context.packageName}"),
                 ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
             )
-            addLog("Разрешите установку из этого источника и нажмите «Обновить клиент» снова")
+            addLog("Разрешите установку из этого источника, затем нажмите «Обновить клиент» ещё раз")
+            return
+        }
+        if (!signaturesMatch(context, file)) {
+            val host = currentHost ?: "сервер"
+            addLog("Новую версию нельзя установить поверх старой (разные подписи). " +
+                "Удалите «Colt Express» на устройстве, затем откройте в браузере http://$host/apk " +
+                "и установите скачанный файл.")
             return
         }
         val uri = FileProvider.getUriForFile(context, context.packageName + ".fileprovider", file)
@@ -255,6 +290,24 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         }
         context.startActivity(intent)
         addLog("Запуск установщика обновления...")
+    }
+
+    @Suppress("DEPRECATION")
+    private fun signaturesMatch(context: Context, apk: File): Boolean {
+        val pm = context.packageManager
+        val installed = try {
+            pm.getPackageInfo(context.packageName, PackageManager.GET_SIGNATURES)
+        } catch (e: Exception) {
+            return true
+        }
+        val archive = try {
+            pm.getPackageArchiveInfo(apk.absolutePath, PackageManager.GET_SIGNATURES)
+        } catch (e: Exception) {
+            return true
+        } ?: return true
+        val installedCerts = installed.signatures?.map { it.toByteArray().toList() } ?: return true
+        val archiveCerts = archive.signatures?.map { it.toByteArray().toList() } ?: return true
+        return installedCerts == archiveCerts
     }
 
     fun createRoom(maxPlayers: Int) {

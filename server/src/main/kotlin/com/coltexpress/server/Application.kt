@@ -35,7 +35,7 @@ import java.io.File
 const val PORT = 8080
 
 /** Version of the client APK this server distributes via /apk. Keep in sync with the client BUILD_NUMBER. */
-const val SERVER_BUILD_NUMBER = 3
+const val SERVER_BUILD_NUMBER = 4
 
 fun main() {
     embeddedServer(Netty, port = PORT, host = "0.0.0.0", module = Application::module)

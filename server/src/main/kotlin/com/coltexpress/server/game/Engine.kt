@@ -18,7 +18,6 @@ import kotlin.random.Random
 sealed interface EngineUpdate {
     data class RoundStarted(val round: Int, val mode: String, val turns: Int, val firstPlayerId: String) : EngineUpdate
     data class PlanningTurn(val playerId: String, val mode: String) : EngineUpdate
-    data class PlanningChoice(val playerId: String, val choice: ChoiceRequired) : EngineUpdate
     data class Robbery(val events: List<GameEvent>, val choice: ChoiceRequired?) : EngineUpdate
     data class GameOver(val results: List<PlayerResult>, val winnerId: String) : EngineUpdate
 }
@@ -62,7 +61,7 @@ class Engine(
     private val playStack = mutableListOf<PlayedCard>()
     private val turnQueue = ArrayDeque<String>()
     private var currentActor: String? = null
-    private var onTheRunOption: String? = null
+
     private var pendingPlays = 0
     private var pendingChoice: PendingChoice? = null
     private var resolveCtx: ResolveContext? = null
@@ -93,7 +92,6 @@ class Engine(
         playStack.clear()
         turnQueue.clear()
         currentActor = null
-        onTheRunOption = null
         pendingPlays = 0
         pendingChoice = null
         resolveCtx = null
@@ -108,7 +106,6 @@ class Engine(
 
     fun playCard(playerId: String, cardType: String): PlayResult {
         if (phase != Phase.PLANNING || pendingChoice != null || currentActor != playerId) return PlayResult(false, emptyList())
-        if (roundCard.mode == RoundMode.ON_THE_RUN && onTheRunOption == null) return PlayResult(false, emptyList())
         val p = byId.getValue(playerId)
         val card = p.hand.filterIsInstance<ActionCard>().firstOrNull { it.type.name == cardType }
             ?: return PlayResult(false, emptyList())
@@ -138,26 +135,10 @@ class Engine(
         if (turnQueue.isEmpty()) return beginRobbery()
         val actor = turnQueue.removeFirst()
         currentActor = actor
-        return if (roundCard.mode == RoundMode.ON_THE_RUN) {
-            val choice = makeChoice(actor, ChoiceKind.ON_THE_RUN_OPTION, null, ON_THE_RUN_OPTIONS, "PLANNING")
-            pendingChoice = choice
-            listOf(EngineUpdate.PlanningChoice(actor, choice.toRequest()))
-        } else {
-            listOf(EngineUpdate.PlanningTurn(actor, roundCard.mode.name))
+        if (roundCard.mode == RoundMode.ON_THE_RUN) {
+            pendingPlays = 2
         }
-    }
-
-    private fun applyOnTheRunOption(playerId: String, option: String) {
-        val p = byId.getValue(playerId)
-        onTheRunOption = option
-        when (option) {
-            "DRAW6" -> draw(p, 6)
-            "DRAW3_PLAY1" -> {
-                draw(p, 3)
-                pendingPlays = 1
-            }
-            else -> pendingPlays = 2 // PLAY2
-        }
+        return listOf(EngineUpdate.PlanningTurn(actor, roundCard.mode.name))
     }
 
     // ===== Ограбление =====
@@ -225,10 +206,6 @@ class Engine(
         val c = pendingChoice ?: return emptyList()
         if (c.playerId != playerId || c.id != choiceId || value !in c.options) return emptyList()
         pendingChoice = null
-        if (phase == Phase.PLANNING) {
-            applyOnTheRunOption(c.playerId, value)
-            return advancePlanning()
-        }
         val ctx = resolveCtx ?: return emptyList()
         val done = applyStep(ctx, value)
         if (done) {
@@ -583,8 +560,4 @@ class Engine(
     }
 
     private fun uuid() = java.util.UUID.randomUUID().toString()
-
-    companion object {
-        val ON_THE_RUN_OPTIONS = listOf("PLAY2", "DRAW6", "DRAW3_PLAY1")
-    }
 }
