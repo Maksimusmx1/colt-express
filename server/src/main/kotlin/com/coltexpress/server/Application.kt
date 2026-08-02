@@ -23,12 +23,14 @@ import io.ktor.server.plugins.calllogging.CallLogging
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.plugins.statuspages.StatusPages
 import io.ktor.server.response.respond
+import io.ktor.server.response.respondFile
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
 import io.ktor.server.websocket.WebSockets
 import io.ktor.server.websocket.webSocket
 import io.ktor.websocket.Frame
 import io.ktor.websocket.readText
+import java.io.File
 
 const val PORT = 8080
 
@@ -56,6 +58,13 @@ fun Application.module() {
     routing {
         get("/health") {
             call.respond(Health("ok", roomManager.playerCount(), roomManager.roomCount()))
+        }
+
+        get("/apk") {
+            val apkPath = System.getenv("COLT_APK_PATH")
+                ?: "C:\\Users\\максим\\OneDrive\\Документы\\Default Project\\android\\app\\build\\outputs\\apk\\debug\\app-debug.apk"
+            val apk = File(apkPath)
+            if (apk.exists()) call.respondFile(apk) else call.respond(HttpStatusCode.NotFound)
         }
 
         webSocket("/ws") {

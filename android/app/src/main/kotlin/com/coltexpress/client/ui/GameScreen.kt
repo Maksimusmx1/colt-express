@@ -1,7 +1,10 @@
 package com.coltexpress.client.ui
 
+import android.os.Build
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -9,8 +12,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -21,6 +26,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
@@ -35,13 +41,20 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.coltexpress.client.BUILD_NUMBER
 import com.coltexpress.client.ChatLine
 import com.coltexpress.client.ConnectionState
 import com.coltexpress.client.GameViewModel
@@ -69,64 +82,104 @@ fun GameScreen(viewModel: GameViewModel = viewModel()) {
     val chat by viewModel.chat.collectAsStateWithLifecycle()
     val gameOver by viewModel.gameOver.collectAsStateWithLifecycle()
     val board by viewModel.board.collectAsStateWithLifecycle()
+    val updateProgress by viewModel.updateProgress.collectAsStateWithLifecycle()
 
     var nickname by remember { mutableStateOf("") }
+    var serverAddress by remember {
+        mutableStateOf(if (isEmulator()) "10.0.2.2:8080" else "100.102.196.74:8080")
+    }
     var joinId by remember { mutableStateOf("") }
     var draft by remember { mutableStateOf("") }
     var maxPlayers by remember { mutableStateOf(4) }
+    var chatOpen by remember { mutableStateOf(false) }
 
     Surface(modifier = Modifier.fillMaxSize()) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .systemBarsPadding()
-                .imePadding()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            when {
-                connection !is ConnectionState.Connected -> ConnectPanel(
-                    connection = connection,
-                    nickname = nickname,
-                    onNickname = { nickname = it },
-                    onConnect = { viewModel.connect(nickname) },
-                )
-                room == null -> RoomEntryPanel(
-                    rooms = rooms,
-                    joinId = joinId,
-                    maxPlayers = maxPlayers,
-                    onJoinId = { joinId = it },
-                    onMaxPlayers = { maxPlayers = it },
-                    onCreate = { viewModel.createRoom(maxPlayers) },
-                    onJoin = { viewModel.joinRoom(joinId) },
-                    onJoinRoom = { viewModel.joinRoom(it) },
-                    onRefresh = { viewModel.refreshRooms() },
-                )
-                else -> GamePanel(
-                    viewModel = viewModel,
-                    roomId = room!!.roomId,
-                    roomPhase = room!!.phase,
-                    players = room!!.players,
-                    myId = myId,
-                    myCharacter = myCharacter,
-                    ownerId = room!!.ownerId,
-                    maxPlayers = room!!.maxPlayers,
-                    hand = hand,
-                    ownBullets = ownBullets,
-                    deckSize = deckSize,
-                    round = round,
-                    currentTurn = currentTurn,
-                    choice = choice,
-                    log = log,
-                    chat = chat,
-                    gameOver = gameOver,
-                    board = board,
-                    draft = draft,
-                    onDraft = { draft = it },
-                    onSend = { viewModel.sendChat(draft); draft = "" },
-                )
+        Box(modifier = Modifier.fillMaxSize()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .systemBarsPadding()
+                    .imePadding()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                when {
+                    connection !is ConnectionState.Connected -> ConnectPanel(
+                        connection = connection,
+                        nickname = nickname,
+                        serverAddress = serverAddress,
+                        onNickname = { nickname = it },
+                        onServerAddress = { serverAddress = it },
+                        onConnect = { viewModel.connect(nickname, serverAddress) },
+                    )
+                    room == null -> RoomEntryPanel(
+                        rooms = rooms,
+                        joinId = joinId,
+                        maxPlayers = maxPlayers,
+                        onJoinId = { joinId = it },
+                        onMaxPlayers = { maxPlayers = it },
+                        onCreate = { viewModel.createRoom(maxPlayers) },
+                        onJoin = { viewModel.joinRoom(joinId) },
+                        onJoinRoom = { viewModel.joinRoom(it) },
+                        onRefresh = { viewModel.refreshRooms() },
+                    )
+                    else -> GamePanel(
+                        viewModel = viewModel,
+                        roomId = room!!.roomId,
+                        roomPhase = room!!.phase,
+                        players = room!!.players,
+                        myId = myId,
+                        myCharacter = myCharacter,
+                        ownerId = room!!.ownerId,
+                        maxPlayers = room!!.maxPlayers,
+                        hand = hand,
+                        ownBullets = ownBullets,
+                        deckSize = deckSize,
+                        round = round,
+                        currentTurn = currentTurn,
+                        choice = choice,
+                        log = log,
+                        chat = chat,
+                        gameOver = gameOver,
+                        board = board,
+                        draft = draft,
+                        onDraft = { draft = it },
+                        onSend = { viewModel.sendChat(draft); draft = "" },
+                        chatOpen = chatOpen,
+                        onChatClosed = { chatOpen = false },
+                    )
+                }
             }
-        }
+            Row(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .systemBarsPadding()
+                    .padding(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "Сборка $BUILD_NUMBER",
+                    style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier.align(Alignment.CenterVertically),
+                )
+                OutlinedButton(
+                    onClick = { viewModel.updateClient() },
+                    enabled = updateProgress == null,
+                ) {
+                    if (updateProgress != null) {
+                        LinearProgressIndicator(
+                            progress = { updateProgress ?: 0f },
+                            modifier = Modifier.width(24.dp).height(24.dp),
+                        )
+                        Text(" ${(updateProgress!! * 100).toInt()}%")
+                    } else {
+                        Text("Обновить клиент")
+                    }
+                }
+                OutlinedButton(onClick = { chatOpen = true }) { Text("Чат") }
+            }
+    }
     }
 }
 
@@ -134,29 +187,54 @@ fun GameScreen(viewModel: GameViewModel = viewModel()) {
 private fun ConnectPanel(
     connection: ConnectionState,
     nickname: String,
+    serverAddress: String,
     onNickname: (String) -> Unit,
+    onServerAddress: (String) -> Unit,
     onConnect: () -> Unit,
 ) {
-    Text("Colt Express", style = MaterialTheme.typography.headlineMedium)
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text("Colt Express", style = MaterialTheme.typography.headlineMedium)
+        Box(
+            modifier = Modifier
+                .size(14.dp)
+                .background(
+                    color = when (connection) {
+                        ConnectionState.Connected -> Color(0xFF2E7D32)
+                        ConnectionState.Connecting -> Color(0xFFF9A825)
+                        ConnectionState.Disconnected -> Color(0xFFC62828)
+                    },
+                    shape = CircleShape,
+                ),
+        )
+    }
     Text(
         text = when (connection) {
-            ConnectionState.Disconnected -> "Отключено"
+            ConnectionState.Disconnected -> "Сервер недоступен"
             ConnectionState.Connecting -> "Подключение..."
-            ConnectionState.Connected -> "Подключено"
+            ConnectionState.Connected -> "Сервер подключён"
         },
         style = MaterialTheme.typography.bodyMedium,
     )
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedTextField(
-            value = nickname,
-            onValueChange = onNickname,
-            modifier = Modifier.weight(1f),
-            placeholder = { Text("Никнейм") },
-            enabled = connection !is ConnectionState.Connecting,
-        )
-        Button(onClick = onConnect, enabled = connection !is ConnectionState.Connecting) {
-            Text("Подключиться")
-        }
+    OutlinedTextField(
+        value = nickname,
+        onValueChange = onNickname,
+        modifier = Modifier.fillMaxWidth(),
+        placeholder = { Text("Никнейм") },
+        enabled = connection !is ConnectionState.Connecting,
+    )
+    OutlinedTextField(
+        value = serverAddress,
+        onValueChange = onServerAddress,
+        modifier = Modifier.fillMaxWidth(),
+        placeholder = { Text("Адрес сервера, например 10.0.2.2:8080 или Tailscale-IP:8080") },
+        enabled = connection !is ConnectionState.Connecting,
+        singleLine = true,
+    )
+    Button(onClick = onConnect, enabled = connection !is ConnectionState.Connecting) {
+        Text("Подключиться")
     }
 }
 
@@ -246,24 +324,37 @@ private fun GamePanel(
     draft: String,
     onDraft: (String) -> Unit,
     onSend: () -> Unit,
+    chatOpen: Boolean,
+    onChatClosed: () -> Unit,
 ) {
     val myTurn = currentTurn == myId && roomPhase == "PLANNING"
     val isOwner = myId == ownerId
     val lastLog = log.lastOrNull()
-    var chatOpen by remember { mutableStateOf(false) }
 
     if (roomPhase == "LOBBY") {
         Column(Modifier.fillMaxSize()) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Комната $roomId", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-                OutlinedButton(onClick = { chatOpen = true }) { Text("Чат") }
+            Row(
+                modifier = Modifier.padding(top = 56.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("Комната $roomId", style = MaterialTheme.typography.titleMedium)
             }
             if (myCharacter != null) {
                 Text("Вы — ${characterName(myCharacter)}", style = MaterialTheme.typography.bodySmall)
             }
             Column {
                 players.forEach { p ->
-                    Text("${p.nickname} — ${characterName(p.character)}${if (p.id == myId) " (вы)" else ""}")
+                    Text(
+                        buildAnnotatedString {
+                            append(p.nickname)
+                            append(" — ")
+                            withStyle(SpanStyle(color = characterColor(p.character), shadow = characterShadow(p.character))) {
+                                append(characterName(p.character))
+                            }
+                            if (p.id == myId) append(" (вы)")
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                    )
                 }
                 Text("${players.size}/$maxPlayers игроков")
                 if (isOwner && players.size >= 3) {
@@ -276,12 +367,16 @@ private fun GamePanel(
                 Text(lastLog, style = MaterialTheme.typography.bodySmall, color = Color(0xFFB00020))
             }
         }
-        ChatSheet(chat, draft, onDraft, onSend, open = chatOpen, onDismiss = { chatOpen = false })
+        ChatSheet(chat, draft, onDraft, onSend, open = chatOpen, onDismiss = onChatClosed)
         return
     }
 
     Column(Modifier.fillMaxSize()) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            modifier = Modifier.padding(top = 56.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
             Column(Modifier.weight(1f)) {
                 Text(
                     text = buildString {
@@ -293,9 +388,19 @@ private fun GamePanel(
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                 )
-                Text("${if (myCharacter != null) "${characterName(myCharacter)}  |  " else ""}Пули: $ownBullets  |  Колода: $deckSize", style = MaterialTheme.typography.bodySmall)
+                Text(
+                    buildAnnotatedString {
+                        if (myCharacter != null) {
+                            withStyle(SpanStyle(color = characterColor(myCharacter!!), shadow = characterShadow(myCharacter!!))) {
+                                append(characterName(myCharacter!!))
+                            }
+                            append("  |  ")
+                        }
+                        append("Пули: $ownBullets  |  Колода: $deckSize")
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                )
             }
-            OutlinedButton(onClick = { chatOpen = true }) { Text("Чат") }
         }
 
         TrainView(board, players, myId)
@@ -317,7 +422,7 @@ private fun GamePanel(
                     OutlinedButton(
                         onClick = { viewModel.choose(opt) },
                         modifier = Modifier.fillMaxWidth(),
-                    ) { Text(choiceOptionLabel(opt)) }
+                    ) { Text(choiceOptionLabel(opt, choice!!.kind, players)) }
                 }
             }
             else -> {
@@ -330,13 +435,22 @@ private fun GamePanel(
 
         if (roomPhase == "PLANNING" && hand.isNotEmpty()) {
             Text("Ваши карты (${hand.size}):", style = MaterialTheme.typography.titleSmall)
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(hand) { card ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                hand.forEach { card ->
                     OutlinedButton(
                         onClick = { viewModel.play(card.type) },
                         enabled = myTurn && card.type != "BULLET",
+                        modifier = Modifier.weight(1f),
                     ) {
-                        Text(if (card.type == "BULLET") "Пуля (нельзя сыграть)" else cardName(card.type))
+                        Text(
+                            text = if (card.type == "BULLET") "Пуля" else cardName(card.type),
+                            style = MaterialTheme.typography.bodySmall,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
                     }
                 }
             }
@@ -346,11 +460,11 @@ private fun GamePanel(
         }
 
         Text("Лог:", style = MaterialTheme.typography.titleSmall)
-        LazyColumn(modifier = Modifier.weight(1f)) {
-            items(log.takeLast(30)) { line -> Text(line, style = MaterialTheme.typography.bodySmall) }
+        LazyColumn(modifier = Modifier.height(64.dp)) {
+            items(log.takeLast(3)) { line -> Text(line, style = MaterialTheme.typography.bodySmall) }
         }
     }
-    ChatSheet(chat, draft, onDraft, onSend, open = chatOpen, onDismiss = { chatOpen = false })
+    ChatSheet(chat, draft, onDraft, onSend, open = chatOpen, onDismiss = onChatClosed)
 }
 
 @Composable
@@ -381,14 +495,26 @@ private fun TrainView(
                         car.inside.forEach { id ->
                             val who = charById[id] ?: id
                             Text(
-                                "${characterName(who)}${if (id == myId) " (вы)" else ""}: в вагоне",
+                                buildAnnotatedString {
+                                    withStyle(SpanStyle(color = characterColor(who), shadow = characterShadow(who))) {
+                                        append(characterName(who))
+                                    }
+                                    if (id == myId) append(" (вы)")
+                                    append(": в вагоне")
+                                },
                                 style = MaterialTheme.typography.labelSmall,
                             )
                         }
                         car.roof.forEach { id ->
                             val who = charById[id] ?: id
                             Text(
-                                "${characterName(who)}${if (id == myId) " (вы)" else ""}: на крыше",
+                                buildAnnotatedString {
+                                    withStyle(SpanStyle(color = characterColor(who), shadow = characterShadow(who))) {
+                                        append(characterName(who))
+                                    }
+                                    if (id == myId) append(" (вы)")
+                                    append(": на крыше")
+                                },
                                 style = MaterialTheme.typography.labelSmall,
                             )
                         }
@@ -468,3 +594,28 @@ private fun ChatSheetContent(
 
 private fun name(players: List<com.coltexpress.client.protocol.Player>, id: String): String =
     players.firstOrNull { it.id == id }?.nickname ?: id
+
+private fun characterColor(character: String): Color = when (character) {
+    "Doc" -> Color(0xFF03A9F4)
+    "Django" -> Color.Black
+    "Cheyenne" -> Color(0xFF4CAF50)
+    "Tuco" -> Color(0xFFF44336)
+    "Ghost" -> Color.White
+    "Belle" -> Color(0xFF9C27B0)
+    else -> Color.Unspecified
+}
+
+private fun characterShadow(character: String): Shadow? = when (character) {
+    "Ghost" -> Shadow(color = Color(0xFF37474F), offset = Offset.Zero, blurRadius = 6f)
+    else -> null
+}
+
+private fun isEmulator(): Boolean =
+    Build.FINGERPRINT.startsWith("generic") ||
+        Build.FINGERPRINT.contains("unknown") ||
+        Build.MODEL.contains("Emulator") ||
+        Build.MODEL.contains("Android SDK built for x86") ||
+        Build.MANUFACTURER.contains("Genymotion") ||
+        Build.PRODUCT.contains("sdk_gphone") ||
+        (Build.BRAND.startsWith("generic") && Build.DEVICE.startsWith("generic")) ||
+        Build.FINGERPRINT.contains("sdk_gphone")

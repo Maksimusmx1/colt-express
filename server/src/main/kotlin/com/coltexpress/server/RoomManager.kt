@@ -305,6 +305,6 @@ class RoomManager {
     }
 
     companion object {
-        private val CHARACTERS = listOf("Doc", "Django", "Kid", "Belle", "Clover", "Tuco")
+        private val CHARACTERS = listOf("Doc", "Django", "Cheyenne", "Belle", "Tuco", "Ghost")
     }
 }

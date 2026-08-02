@@ -403,9 +403,23 @@ class Engine(
     private fun applyPunchMove(victimId: String, value: String) {
         val victim = byId.getValue(victimId)
         val from = victim.car
-        val to = (from + parseDelta(value)).coerceIn(0, cars.lastIndex)
-        movePlayer(victim, to)
-        eventBuffer += BanditMoved(victim.id, from, to, victim.onRoof)
+        if (value == "ROOF") {
+            val car = cars[victim.car]
+            if (victim.onRoof) {
+                car.roof.remove(victim.id)
+                car.inside.add(victim.id)
+                victim.onRoof = false
+            } else {
+                car.inside.remove(victim.id)
+                car.roof.add(victim.id)
+                victim.onRoof = true
+            }
+            eventBuffer += BanditMoved(victim.id, from, from, victim.onRoof)
+        } else {
+            val to = (from + parseDelta(value)).coerceIn(0, cars.lastIndex)
+            movePlayer(victim, to)
+            eventBuffer += BanditMoved(victim.id, from, to, victim.onRoof)
+        }
         if (!victim.onRoof) sheriffEncounter()
     }
 
@@ -472,18 +486,26 @@ class Engine(
             if (p.car > 0) targets += cars[p.car - 1].inside + cars[p.car - 1].roof
             if (p.car < cars.lastIndex) targets += cars[p.car + 1].inside + cars[p.car + 1].roof
         }
-        return targets
+        return eligibleTargets(targets)
     }
 
     private fun punchVictims(p: PlayerState): List<String> {
         val set = if (p.onRoof) cars[p.car].roof else cars[p.car].inside
-        return set.filter { it != p.id }
+        return eligibleTargets(set.filter { it != p.id })
+    }
+
+    /** Если кроме Красотки есть другая возможная цель, Красотка не может быть целью. */
+    private fun eligibleTargets(targets: List<String>): List<String> {
+        if (targets.size <= 1) return targets
+        val belle = targets.firstOrNull { byId[it]?.character == "Belle" }
+        return if (belle != null) targets.filter { it != belle } else targets
     }
 
     private fun punchDirections(victim: PlayerState): List<String> {
         val opts = mutableListOf<String>()
         if (victim.car > 0) opts += "B"
         if (victim.car < cars.lastIndex) opts += "F"
+        opts += "ROOF"
         return opts
     }
 
