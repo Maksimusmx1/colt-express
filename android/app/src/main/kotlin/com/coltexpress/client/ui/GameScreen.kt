@@ -24,6 +24,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.LinearProgressIndicator
@@ -33,6 +34,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -83,6 +85,8 @@ fun GameScreen(viewModel: GameViewModel = viewModel()) {
     val gameOver by viewModel.gameOver.collectAsStateWithLifecycle()
     val board by viewModel.board.collectAsStateWithLifecycle()
     val updateProgress by viewModel.updateProgress.collectAsStateWithLifecycle()
+    val updateAvailable by viewModel.updateAvailable.collectAsStateWithLifecycle()
+    val serverBuild by viewModel.serverBuild.collectAsStateWithLifecycle()
 
     var nickname by remember { mutableStateOf("") }
     var serverAddress by remember {
@@ -178,6 +182,29 @@ fun GameScreen(viewModel: GameViewModel = viewModel()) {
                     }
                 }
                 OutlinedButton(onClick = { chatOpen = true }) { Text("Чат") }
+            }
+            if (updateAvailable) {
+                AlertDialog(
+                    onDismissRequest = { viewModel.dismissUpdate() },
+                    title = { Text("Доступно обновление") },
+                    text = {
+                        Text(
+                            "Сервер предлагает сборку клиента №${serverBuild ?: "?"} (у вас $BUILD_NUMBER). " +
+                                "Обновить клиент сейчас?"
+                        )
+                    },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                viewModel.dismissUpdate()
+                                viewModel.updateClient()
+                            },
+                        ) { Text("Обновить") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { viewModel.dismissUpdate() }) { Text("Позже") }
+                    },
+                )
             }
     }
     }

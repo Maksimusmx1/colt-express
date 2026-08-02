@@ -55,7 +55,7 @@ sealed interface ConnectionState {
     data object Connected : ConnectionState
 }
 
-const val BUILD_NUMBER = 2
+const val BUILD_NUMBER = 3
 
 data class RoomInfo(
     val roomId: String,
@@ -138,6 +138,12 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     private val _updateProgress = MutableStateFlow<Float?>(null)
     val updateProgress: StateFlow<Float?> = _updateProgress.asStateFlow()
 
+    private val _serverBuild = MutableStateFlow<Int?>(null)
+    val serverBuild: StateFlow<Int?> = _serverBuild.asStateFlow()
+
+    private val _updateAvailable = MutableStateFlow(false)
+    val updateAvailable: StateFlow<Boolean> = _updateAvailable.asStateFlow()
+
     val isMyTurn: Boolean get() = _currentTurn.value != null && _currentTurn.value == _myId.value
 
     fun connect(newNickname: String, serverAddress: String) {
@@ -164,6 +170,18 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 _connection.value = ConnectionState.Disconnected
             }
         }
+        viewModelScope.launch {
+            val serverBuild = client.fetchServerBuild()
+            _serverBuild.value = serverBuild
+            if (serverBuild != null && serverBuild >= 0 && serverBuild != BUILD_NUMBER) {
+                _updateAvailable.value = true
+                addLog("Доступна новая сборка клиента №$serverBuild (у вас $BUILD_NUMBER)")
+            }
+        }
+    }
+
+    fun dismissUpdate() {
+        _updateAvailable.value = false
     }
 
     fun updateClient() {

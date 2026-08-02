@@ -181,6 +181,9 @@ data class Chat(val nickname: String, val text: String) : ServerMessage
 @SerialName("Error")
 data class Error(val message: String) : ServerMessage
 
+@Serializable
+data class Health(val status: String, val players: Int, val rooms: Int, val buildNumber: Int = -1)
+
 // ===== Game events =====
 
 @Serializable

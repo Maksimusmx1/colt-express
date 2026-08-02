@@ -4,6 +4,7 @@ import com.coltexpress.client.protocol.ClientMessage
 import com.coltexpress.client.protocol.CreateRoom
 import com.coltexpress.client.protocol.DefaultJson
 import com.coltexpress.client.protocol.DrawCards
+import com.coltexpress.client.protocol.Health
 import com.coltexpress.client.protocol.JoinRoom
 import com.coltexpress.client.protocol.ListRooms
 import com.coltexpress.client.protocol.MakeChoice
@@ -18,9 +19,13 @@ import io.ktor.client.plugins.websocket.webSocket
 import io.ktor.client.plugins.websocket.ClientWebSocketSession
 import io.ktor.websocket.Frame
 import io.ktor.websocket.readText
+import java.net.HttpURLConnection
+import java.net.URL
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.withContext
 
 class GameClient(
     private val url: String = DEFAULT_URL,
@@ -62,6 +67,31 @@ class GameClient(
 
     private suspend fun send(message: ClientMessage) {
         session?.send(Frame.Text(json.encodeToString(ClientMessage.serializer(), message)))
+    }
+
+    /** Fetches the client build number that the server distributes via /apk. */
+    suspend fun fetchServerBuild(): Int? {
+        val base = url
+            .replaceFirst("ws://", "http://")
+            .replaceFirst("wss://", "https://")
+            .substringBeforeLast('/')
+        return withContext(Dispatchers.IO) {
+            try {
+                val conn = URL("$base/health").openConnection() as HttpURLConnection
+                try {
+                    conn.connectTimeout = 5000
+                    conn.readTimeout = 5000
+                    if (conn.responseCode != HttpURLConnection.HTTP_OK) return@withContext null
+                    conn.inputStream.bufferedReader().use { reader ->
+                        json.decodeFromString<Health>(reader.readText()).buildNumber
+                    }
+                } finally {
+                    conn.disconnect()
+                }
+            } catch (e: Exception) {
+                null
+            }
+        }
     }
 
     fun disconnect() {
