@@ -2,6 +2,7 @@ package com.coltexpress.client.ui
 
 import android.os.Build
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -46,9 +47,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Fill
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -72,6 +80,9 @@ import com.coltexpress.client.cardName
 import com.coltexpress.client.characterName
 import com.coltexpress.client.choiceKindName
 import com.coltexpress.client.choiceOptionLabel
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.sin
 
 @Composable
 fun GameScreen(viewModel: GameViewModel = viewModel()) {
@@ -589,6 +600,8 @@ private fun GamePanel(
     ChatSheet(chat, draft, onDraft, onSend, open = chatOpen, onDismiss = onChatClosed)
 }
 
+private val TrainDeep = Color(0xFFC9B585)
+
 @Composable
 private fun TrainView(
     board: com.coltexpress.client.protocol.BoardState?,
@@ -597,57 +610,275 @@ private fun TrainView(
 ) {
     if (board == null) return
     val charById = players.associate { it.id to it.character }
-    Column(Modifier.fillMaxWidth()) {
-        Text("Состав поезда:", style = MaterialTheme.typography.titleSmall)
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .background(PaperBg, RoundedCornerShape(6.dp))
+            .border(1.dp, PaperInk)
+            .padding(8.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            HorizontalDivider(Modifier.weight(1f), thickness = 1.dp, color = PaperInk)
+            Text(
+                "  СОСТАВ ПОЕЗДА  ",
+                fontFamily = FontFamily.Serif,
+                fontWeight = FontWeight.Bold,
+                fontSize = 12.sp,
+                color = PaperInk,
+            )
+            HorizontalDivider(Modifier.weight(1f), thickness = 1.dp, color = PaperInk)
+        }
+        Spacer(Modifier.height(6.dp))
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             items(board.cars, key = { it.index }) { car ->
-                Surface(
-                    shape = RoundedCornerShape(6.dp),
-                    border = BorderStroke(1.dp, if (car.index == 0) Color(0xFF6D4C41) else Color(0xFFB0BEC5)),
-                ) {
-                    Column(Modifier.width(120.dp).padding(6.dp)) {
-                        Text(
-                            if (car.index == 0) "Локомотив" else "Вагон ${car.index}",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                        )
-                        if (board.sheriffCar == car.index) {
-                            Text("Шериф", style = MaterialTheme.typography.labelSmall, color = Color(0xFFB8860B))
-                        }
-                        car.inside.forEach { id ->
-                            val who = charById[id] ?: id
-                            Text(
-                                buildAnnotatedString {
-                                    withStyle(SpanStyle(color = characterColor(who), shadow = characterShadow(who))) {
-                                        append(characterName(who))
-                                    }
-                                    if (id == myId) append(" (вы)")
-                                    append(": в вагоне")
-                                },
-                                style = MaterialTheme.typography.labelSmall,
-                            )
-                        }
+                TrainCar(
+                    car = car,
+                    charById = charById,
+                    myId = myId,
+                    isSheriff = board.sheriffCar == car.index,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun TrainCar(
+    car: com.coltexpress.client.protocol.BoardCar,
+    charById: Map<String, String>,
+    myId: String?,
+    isSheriff: Boolean,
+) {
+    val isLoc = car.index == 0
+    val w = if (isLoc) 180.dp else 150.dp
+    val cabPad = if (isLoc) 66.dp else 0.dp
+    Column(Modifier.width(w)) {
+        Box(Modifier.width(w).height(160.dp)) {
+            Canvas(Modifier.fillMaxSize()) { drawCarBody(isLoc, isSheriff) }
+            if (car.roof.isNotEmpty()) {
+                Box(Modifier.align(Alignment.TopCenter).padding(start = cabPad, top = 52.dp)) {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.Bottom,
+                    ) {
                         car.roof.forEach { id ->
-                            val who = charById[id] ?: id
-                            Text(
-                                buildAnnotatedString {
-                                    withStyle(SpanStyle(color = characterColor(who), shadow = characterShadow(who))) {
-                                        append(characterName(who))
-                                    }
-                                    if (id == myId) append(" (вы)")
-                                    append(": на крыше")
-                                },
-                                style = MaterialTheme.typography.labelSmall,
-                            )
-                        }
-                        if (car.lootInside + car.lootRoof > 0) {
-                            Text("Добыча: ${car.lootInside + car.lootRoof}", style = MaterialTheme.typography.labelSmall)
+                            MeepleFigure(characterColor(charById[id] ?: id), id == myId)
                         }
                     }
                 }
             }
+            if (car.inside.isNotEmpty()) {
+                Box(Modifier.align(Alignment.TopCenter).padding(start = cabPad, top = 94.dp)) {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.Bottom,
+                    ) {
+                        car.inside.forEach { id ->
+                            MeepleFigure(characterColor(charById[id] ?: id), id == myId)
+                        }
+                    }
+                }
+            }
+            if (car.lootRoof > 0) {
+                LootBadge(car.lootRoof, Modifier.align(Alignment.TopEnd).padding(end = 6.dp, top = 56.dp))
+            }
+            if (car.lootInside > 0) {
+                LootBadge(car.lootInside, Modifier.align(Alignment.TopStart).padding(start = cabPad + 10.dp, top = 88.dp))
+            }
+        }
+        Column(Modifier.fillMaxWidth()) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    if (isLoc) "ЛОКОМОТИВ" else "ВАГОН №${car.index}",
+                    fontFamily = FontFamily.Serif,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 11.sp,
+                    color = PaperInk,
+                )
+                if (isSheriff) {
+                    Text("★ Шериф", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = PaperRust)
+                }
+            }
+            CarLegend("В вагоне: ", car.inside, charById)
+            CarLegend("На крыше: ", car.roof, charById)
+            if (car.lootInside + car.lootRoof > 0) {
+                Text("Добыча: ${car.lootInside + car.lootRoof}", fontSize = 9.sp, color = PaperInkMuted)
+            }
         }
     }
+}
+
+@Composable
+private fun CarLegend(prefix: String, ids: List<String>, charById: Map<String, String>) {
+    val chars = ids.map { charById[it] ?: it }.filter { it.isNotBlank() }
+    if (chars.isEmpty()) return
+    Text(
+        buildAnnotatedString {
+            append(prefix)
+            chars.forEachIndexed { i, ch ->
+                if (i > 0) append(", ")
+                withStyle(SpanStyle(color = characterInk(ch), fontWeight = FontWeight.Bold)) {
+                    append(characterName(ch))
+                }
+            }
+        },
+        fontSize = 9.sp,
+        color = PaperInkMuted,
+        maxLines = 2,
+        overflow = TextOverflow.Ellipsis,
+    )
+}
+
+@Composable
+private fun LootBadge(count: Int, modifier: Modifier) {
+    Box(
+        modifier
+            .background(PaperRust, RoundedCornerShape(4.dp))
+            .padding(horizontal = 5.dp, vertical = 2.dp),
+    ) {
+        Text("$$count", color = Color(0xFFF7EFDC), fontSize = 9.sp, fontWeight = FontWeight.Bold)
+    }
+}
+
+@Composable
+private fun MeepleFigure(color: Color, isMe: Boolean) {
+    Canvas(Modifier.size(width = 20.dp, height = 28.dp)) {
+        drawMeeple(color, PaperInk, isMe)
+    }
+}
+
+private fun characterInk(character: String): Color = when (character) {
+    "Ghost" -> Color(0xFF37474F)
+    else -> characterColor(character)
+}
+
+private fun DrawScope.drawMeeple(color: Color, ink: Color, isMe: Boolean) {
+    val d = density
+    val cx = size.width / 2f
+    val base = size.height
+    drawOval(
+        color = ink.copy(alpha = 0.18f),
+        topLeft = Offset(cx - 6f * d, base - 1.5f * d),
+        size = Size(12f * d, 3f * d),
+    )
+    val head = Rect(cx - 4.2f * d, base - 24.5f * d, cx + 4.2f * d, base - 15.5f * d)
+    drawOval(color, topLeft = Offset(head.left, head.top), size = Size(head.width, head.height))
+    drawOval(ink, topLeft = Offset(head.left, head.top), size = Size(head.width, head.height), style = Stroke(width = 1.1f * d))
+    val body = Path().apply {
+        moveTo(cx - 4.5f * d, base - 15f * d)
+        lineTo(cx - 6.5f * d, base - 13f * d)
+        lineTo(cx - 3.5f * d, base - 8f * d)
+        lineTo(cx - 6f * d, base - 1f * d)
+        lineTo(cx + 6f * d, base - 1f * d)
+        lineTo(cx + 3.5f * d, base - 8f * d)
+        lineTo(cx + 6.5f * d, base - 13f * d)
+        lineTo(cx + 4.5f * d, base - 15f * d)
+        close()
+    }
+    drawPath(body, color)
+    drawPath(body, ink, style = Stroke(width = 1.1f * d))
+    if (isMe) {
+        drawLine(PaperRust, Offset(cx - 6.5f * d, base), Offset(cx + 6.5f * d, base), strokeWidth = 2.2f * d)
+    }
+}
+
+private fun DrawScope.drawCarBody(isLoc: Boolean, isSheriff: Boolean) {
+    val d = density
+    val w = size.width
+    val h = size.height
+    fun p(v: Float) = v * d
+    val ink = PaperInk
+    val wood = PaperCard
+    val deep = TrainDeep
+    val muted = PaperInkMuted
+    val rust = PaperRust
+    val thin = Stroke(width = p(1.2f))
+
+    if (isLoc) {
+        val cowcatcher = Path().apply {
+            moveTo(p(4f), h - p(30f))
+            lineTo(p(10f), h - p(52f))
+            lineTo(p(34f), h - p(30f))
+            close()
+        }
+        drawPath(cowcatcher, wood)
+        drawPath(cowcatcher, ink, style = thin)
+        drawRoundRect(
+            wood,
+            topLeft = Offset(p(12f), h - p(82f)),
+            size = Size(p(40f), p(44f)),
+            cornerRadius = CornerRadius(p(6f)),
+            style = Fill,
+        )
+        drawRoundRect(
+            ink,
+            topLeft = Offset(p(12f), h - p(82f)),
+            size = Size(p(40f), p(44f)),
+            cornerRadius = CornerRadius(p(6f)),
+            style = thin,
+        )
+        drawLine(muted, Offset(p(28f), h - p(78f)), Offset(p(28f), h - p(44f)), strokeWidth = p(1.5f))
+        drawLine(muted, Offset(p(42f), h - p(78f)), Offset(p(42f), h - p(44f)), strokeWidth = p(1.5f))
+        drawRect(wood, topLeft = Offset(p(18f), h - p(102f)), size = Size(p(8f), p(20f)))
+        drawRect(ink, topLeft = Offset(p(18f), h - p(102f)), size = Size(p(8f), p(20f)), style = thin)
+        drawRect(rust, topLeft = Offset(p(15f), h - p(108f)), size = Size(p(14f), p(6f)))
+        drawCircle(rust, radius = p(6f), center = Offset(p(18f), h - p(58f)))
+        drawCircle(ink, radius = p(6f), center = Offset(p(18f), h - p(58f)), style = thin)
+        drawRect(wood, topLeft = Offset(p(56f), h - p(80f)), size = Size(p(120f), p(42f)))
+        drawRect(ink, topLeft = Offset(p(56f), h - p(80f)), size = Size(p(120f), p(42f)), style = thin)
+        drawRect(deep, topLeft = Offset(p(60f), h - p(76f)), size = Size(p(112f), p(38f)))
+        drawRect(wood, topLeft = Offset(p(54f), h - p(86f)), size = Size(w - p(58f), p(6f)))
+        drawRect(ink, topLeft = Offset(p(54f), h - p(86f)), size = Size(w - p(58f), p(6f)), style = thin)
+    } else {
+        drawRect(wood, topLeft = Offset(p(4f), h - p(80f)), size = Size(w - p(8f), p(6f)))
+        drawRect(ink, topLeft = Offset(p(4f), h - p(80f)), size = Size(w - p(8f), p(6f)), style = thin)
+        drawRoundRect(
+            deep,
+            topLeft = Offset(p(10f), h - p(74f)),
+            size = Size(w - p(20f), p(36f)),
+            cornerRadius = CornerRadius(p(4f)),
+            style = Fill,
+        )
+        drawRoundRect(
+            ink,
+            topLeft = Offset(p(10f), h - p(74f)),
+            size = Size(w - p(20f), p(36f)),
+            cornerRadius = CornerRadius(p(4f)),
+            style = thin,
+        )
+    }
+
+    drawRect(wood, topLeft = Offset(p(6f), h - p(38f)), size = Size(w - p(12f), p(4f)))
+    drawRect(ink, topLeft = Offset(p(6f), h - p(38f)), size = Size(w - p(12f), p(4f)), style = thin)
+    drawRect(muted, topLeft = Offset(p(8f), h - p(34f)), size = Size(w - p(16f), p(6f)))
+    val wheelXs = if (isLoc) listOf(p(34f), p(110f), p(158f)) else listOf(w * 0.3f, w * 0.7f)
+    wheelXs.forEach { cx ->
+        drawCircle(wood, radius = p(10f), center = Offset(cx, h - p(20f)))
+        drawCircle(ink, radius = p(10f), center = Offset(cx, h - p(20f)), style = Stroke(width = p(1.6f)))
+        drawCircle(ink, radius = p(3f), center = Offset(cx, h - p(20f)))
+        drawLine(muted, Offset(cx - p(6f), h - p(20f)), Offset(cx + p(6f), h - p(20f)), strokeWidth = p(1.2f))
+    }
+
+    if (isSheriff) {
+        drawStar(Offset(w - p(18f), h - p(116f)), p(8f), rust, ink)
+    }
+}
+
+private fun DrawScope.drawStar(center: Offset, outerRadius: Float, fill: Color, stroke: Color) {
+    val innerRadius = outerRadius * 0.5f
+    val path = Path()
+    for (i in 0 until 10) {
+        val angle = -PI / 2 + i * PI / 5
+        val r = if (i % 2 == 0) outerRadius else innerRadius
+        val x = center.x + (cos(angle) * r).toFloat()
+        val y = center.y + (sin(angle) * r).toFloat()
+        if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+    }
+    path.close()
+    drawPath(path, fill)
+    drawPath(path, stroke, style = Stroke(width = 1.2f * density))
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
