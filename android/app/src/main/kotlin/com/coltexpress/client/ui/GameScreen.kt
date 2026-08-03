@@ -3,10 +3,12 @@ package com.coltexpress.client.ui
 import android.os.Build
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -27,6 +29,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -49,11 +52,14 @@ import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.coltexpress.client.BUILD_NUMBER
@@ -210,6 +216,12 @@ fun GameScreen(viewModel: GameViewModel = viewModel()) {
     }
 }
 
+private val PaperBg = Color(0xFFF2E9D4)
+private val PaperCard = Color(0xFFE5D7B6)
+private val PaperInk = Color(0xFF2B1D0F)
+private val PaperInkMuted = Color(0xFF6B5B45)
+private val PaperRust = Color(0xFF8C2F24)
+
 @Composable
 private fun ConnectPanel(
     connection: ConnectionState,
@@ -219,49 +231,132 @@ private fun ConnectPanel(
     onServerAddress: (String) -> Unit,
     onConnect: () -> Unit,
 ) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Text("Colt Express", style = MaterialTheme.typography.headlineMedium)
-        Box(
+    Box(modifier = Modifier.fillMaxSize().background(PaperBg)) {
+        Column(
             modifier = Modifier
-                .size(14.dp)
-                .background(
-                    color = when (connection) {
-                        ConnectionState.Connected -> Color(0xFF2E7D32)
-                        ConnectionState.Connecting -> Color(0xFFF9A825)
-                        ConnectionState.Disconnected -> Color(0xFFC62828)
-                    },
-                    shape = CircleShape,
-                ),
-        )
-    }
-    Text(
-        text = when (connection) {
-            ConnectionState.Disconnected -> "Сервер недоступен"
-            ConnectionState.Connecting -> "Подключение..."
-            ConnectionState.Connected -> "Сервер подключён"
-        },
-        style = MaterialTheme.typography.bodyMedium,
-    )
-    OutlinedTextField(
-        value = nickname,
-        onValueChange = onNickname,
-        modifier = Modifier.fillMaxWidth(),
-        placeholder = { Text("Никнейм") },
-        enabled = connection !is ConnectionState.Connecting,
-    )
-    OutlinedTextField(
-        value = serverAddress,
-        onValueChange = onServerAddress,
-        modifier = Modifier.fillMaxWidth(),
-        placeholder = { Text("Адрес сервера, например 10.0.2.2:8080 или Tailscale-IP:8080") },
-        enabled = connection !is ConnectionState.Connecting,
-        singleLine = true,
-    )
-    Button(onClick = onConnect, enabled = connection !is ConnectionState.Connecting) {
-        Text("Подключиться")
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 28.dp, vertical = 20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(
+                "ЕЖЕДНЕВНЫЙ ВЕСТНИК ЖЕЛЕЗНЫХ ДОРОГ",
+                style = MaterialTheme.typography.labelSmall,
+                color = PaperInkMuted,
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = TextAlign.Left,
+            )
+            Text(
+                "Основан в 1871 году · Печатается по мере поступления добычи",
+                style = MaterialTheme.typography.labelSmall,
+                color = PaperInkMuted,
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = TextAlign.Left,
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                "The Coltshead Tribune",
+                fontFamily = FontFamily.Serif,
+                fontWeight = FontWeight.Black,
+                fontSize = 46.sp,
+                color = PaperInk,
+                textAlign = TextAlign.Center,
+            )
+            Text(
+                "ГАЗЕТА ЗАПАДА",
+                fontFamily = FontFamily.Serif,
+                fontWeight = FontWeight.Bold,
+                fontSize = 13.sp,
+                letterSpacing = 7.sp,
+                color = PaperRust,
+            )
+            Spacer(Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text("Среда, 3 августа 1887 г.", style = MaterialTheme.typography.labelSmall, color = PaperInkMuted)
+                Text("№ 42", style = MaterialTheme.typography.labelSmall, color = PaperInkMuted)
+            }
+            HorizontalDivider(thickness = 2.dp, color = PaperInk)
+            HorizontalDivider(thickness = 1.dp, color = PaperInk)
+            Spacer(Modifier.height(16.dp))
+            Text(
+                "БАНДА КОЛЬТА СНОВА ВЫХОДИТ НА БОЛЬШУЮ ДОРОГУ!",
+                fontFamily = FontFamily.Serif,
+                fontWeight = FontWeight.Bold,
+                fontSize = 28.sp,
+                color = PaperInk,
+                textAlign = TextAlign.Center,
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "Телеграф доносит: по западным штатам курсирует состав с золотом. " +
+                    "Для ограбления требуются отчаянные бандиты. Подключитесь к серверу и присоединяйтесь к банде.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = PaperInkMuted,
+                textAlign = TextAlign.Center,
+            )
+            Spacer(Modifier.height(16.dp))
+            val status = when (connection) {
+                ConnectionState.Connected -> "Банда на связи: сервер отвечает." to Color(0xFF2E7D32)
+                ConnectionState.Connecting -> "Устанавливаем связь с телеграфом..." to Color(0xFFB07A00)
+                ConnectionState.Disconnected -> "Связь прервана: сервер недоступен. Проверка каждую минуту." to Color(0xFFC62828)
+            }
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(PaperCard, RoundedCornerShape(6.dp))
+                    .border(1.dp, PaperInk)
+                    .padding(12.dp),
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            Modifier
+                                .size(10.dp)
+                                .background(status.second, CircleShape),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            "ТЕЛЕГРАФНАЯ СВОДКА",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = PaperInk,
+                        )
+                    }
+                    Text(status.first, style = MaterialTheme.typography.bodyMedium, color = PaperInk)
+                }
+            }
+            Spacer(Modifier.height(16.dp))
+            OutlinedTextField(
+                value = nickname,
+                onValueChange = onNickname,
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("Ваше имя (для подписи в газете)") },
+                placeholder = { Text("Бандит") },
+                singleLine = true,
+                enabled = connection !is ConnectionState.Connecting,
+            )
+            Spacer(Modifier.height(8.dp))
+            OutlinedTextField(
+                value = serverAddress,
+                onValueChange = onServerAddress,
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("Адрес телеграфа (сервер)") },
+                placeholder = { Text("colt.example.com:8080") },
+                singleLine = true,
+                enabled = connection !is ConnectionState.Connecting,
+            )
+            Spacer(Modifier.height(16.dp))
+            Button(
+                onClick = onConnect,
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+                enabled = connection !is ConnectionState.Connecting,
+            ) {
+                Text("НАБОР В БАНДУ", fontWeight = FontWeight.Bold)
+            }
+        }
     }
 }
 
