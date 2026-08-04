@@ -1,5 +1,6 @@
 package com.coltexpress.client.ui
 
+import android.content.Context
 import android.os.Build
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
@@ -57,6 +58,7 @@ import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -83,6 +85,8 @@ import com.coltexpress.client.choiceOptionLabel
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
+import kotlin.random.Random
+import kotlinx.coroutines.delay
 
 @Composable
 fun GameScreen(viewModel: GameViewModel = viewModel()) {
@@ -105,14 +109,70 @@ fun GameScreen(viewModel: GameViewModel = viewModel()) {
     val updateAvailable by viewModel.updateAvailable.collectAsStateWithLifecycle()
     val serverBuild by viewModel.serverBuild.collectAsStateWithLifecycle()
 
-    var nickname by remember { mutableStateOf("") }
+    val isEmu = remember { isEmulator() }
+    val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences("colt", Context.MODE_PRIVATE) }
+
+    var nickname by remember {
+        mutableStateOf(prefs.getString("nickname", "") ?: "")
+    }
     var serverAddress by remember {
-        mutableStateOf(if (isEmulator()) "10.0.2.2:8080" else "100.102.196.74:8080")
+        mutableStateOf(
+            prefs.getString("serverAddress", if (isEmu) "10.0.2.2:8080" else "100.102.196.74:8080") ?: ""
+        )
     }
     var joinId by remember { mutableStateOf("") }
     var draft by remember { mutableStateOf("") }
     var maxPlayers by remember { mutableStateOf(4) }
     var chatOpen by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        delay(500)
+        if (viewModel.connection.value is ConnectionState.Disconnected) {
+            viewModel.autoConnect(if (isEmu) botNickname() else "Бандит", serverAddress)
+        }
+    }
+
+    LaunchedEffect(isEmu) {
+        if (!isEmu) return@LaunchedEffect
+        while (true) {
+            val connected = viewModel.connection.value is ConnectionState.Connected
+            val roomNow = viewModel.room.value
+            if (connected && roomNow != null && roomNow.ownerId == viewModel.myId.value &&
+                roomNow.phase == "LOBBY" && roomNow.players.size >= 3
+            ) {
+                viewModel.startGame()
+            }
+            if (connected && roomNow == null) {
+                viewModel.refreshRooms()
+                delay(2000)
+                val target = viewModel.rooms.value.firstOrNull {
+                    it.phase == "LOBBY" && it.players < it.maxPlayers
+                }
+                if (target != null) viewModel.joinRoom(target.roomId)
+            }
+            delay(2000)
+        }
+    }
+
+    LaunchedEffect(isEmu, currentTurn) {
+        if (!isEmu) return@LaunchedEffect
+        val turn = currentTurn ?: return@LaunchedEffect
+        delay(800)
+        if (viewModel.room.value?.phase == "PLANNING" && turn == viewModel.myId.value) {
+            val playable = viewModel.hand.value.filter { it.type != "BULLET" }
+            if (playable.isNotEmpty()) viewModel.play(playable.first().type) else viewModel.draw()
+        }
+    }
+
+    LaunchedEffect(isEmu, choice) {
+        if (!isEmu) return@LaunchedEffect
+        val c = choice ?: return@LaunchedEffect
+        delay(800)
+        if (c.playerId == viewModel.myId.value && c.options.isNotEmpty()) {
+            viewModel.choose(c.options.first())
+        }
+    }
 
     Surface(modifier = Modifier.fillMaxSize()) {
         Box(modifier = Modifier.fillMaxSize()) {
@@ -198,7 +258,7 @@ fun GameScreen(viewModel: GameViewModel = viewModel()) {
                         Text("Обновить клиент")
                     }
                 }
-                OutlinedButton(onClick = { chatOpen = true }) { Text("Чат") }
+                OutlinedButton(onClick = { viewModel.restartSession() }) { Text("Перезапустить сессию") }
             }
             if (updateAvailable) {
                 AlertDialog(
@@ -601,6 +661,7 @@ private fun GamePanel(
 }
 
 private val TrainDeep = Color(0xFFC9B585)
+private val SheriffYellow = Color(0xFFFBC02D)
 
 @Composable
 private fun TrainView(
@@ -654,7 +715,12 @@ private fun TrainCar(
     val cabPad = if (isLoc) 66.dp else 0.dp
     Column(Modifier.width(w)) {
         Box(Modifier.width(w).height(160.dp)) {
-            Canvas(Modifier.fillMaxSize()) { drawCarBody(isLoc, isSheriff) }
+            Canvas(Modifier.fillMaxSize()) { drawCarBody(isLoc) }
+            if (isSheriff) {
+                Box(Modifier.align(Alignment.TopStart).padding(start = cabPad + 6.dp, top = 94.dp)) {
+                    SheriffFigure()
+                }
+            }
             if (car.roof.isNotEmpty()) {
                 Box(Modifier.align(Alignment.TopCenter).padding(start = cabPad, top = 52.dp)) {
                     Row(
@@ -698,7 +764,7 @@ private fun TrainCar(
                     color = PaperInk,
                 )
                 if (isSheriff) {
-                    Text("★ Шериф", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = PaperRust)
+                    Text("Шериф", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = PaperRust)
                 }
             }
             CarLegend("В вагоне: ", car.inside, charById)
@@ -749,6 +815,13 @@ private fun MeepleFigure(color: Color, isMe: Boolean) {
     }
 }
 
+@Composable
+private fun SheriffFigure() {
+    Canvas(Modifier.size(width = 22.dp, height = 30.dp)) {
+        drawMeeple(SheriffYellow, PaperInk, isMe = false)
+    }
+}
+
 private fun characterInk(character: String): Color = when (character) {
     "Ghost" -> Color(0xFF37474F)
     else -> characterColor(character)
@@ -784,7 +857,7 @@ private fun DrawScope.drawMeeple(color: Color, ink: Color, isMe: Boolean) {
     }
 }
 
-private fun DrawScope.drawCarBody(isLoc: Boolean, isSheriff: Boolean) {
+private fun DrawScope.drawCarBody(isLoc: Boolean) {
     val d = density
     val w = size.width
     val h = size.height
@@ -860,25 +933,6 @@ private fun DrawScope.drawCarBody(isLoc: Boolean, isSheriff: Boolean) {
         drawCircle(ink, radius = p(3f), center = Offset(cx, h - p(20f)))
         drawLine(muted, Offset(cx - p(6f), h - p(20f)), Offset(cx + p(6f), h - p(20f)), strokeWidth = p(1.2f))
     }
-
-    if (isSheriff) {
-        drawStar(Offset(w - p(18f), h - p(116f)), p(8f), rust, ink)
-    }
-}
-
-private fun DrawScope.drawStar(center: Offset, outerRadius: Float, fill: Color, stroke: Color) {
-    val innerRadius = outerRadius * 0.5f
-    val path = Path()
-    for (i in 0 until 10) {
-        val angle = -PI / 2 + i * PI / 5
-        val r = if (i % 2 == 0) outerRadius else innerRadius
-        val x = center.x + (cos(angle) * r).toFloat()
-        val y = center.y + (sin(angle) * r).toFloat()
-        if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
-    }
-    path.close()
-    drawPath(path, fill)
-    drawPath(path, stroke, style = Stroke(width = 1.2f * density))
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -972,3 +1026,8 @@ private fun isEmulator(): Boolean =
         Build.PRODUCT.contains("sdk_gphone") ||
         (Build.BRAND.startsWith("generic") && Build.DEVICE.startsWith("generic")) ||
         Build.FINGERPRINT.contains("sdk_gphone")
+
+private fun botNickname(): String {
+    val tags = listOf("Динамит", "Кувалда", "Седло", "Пыль", "Гроза", "Ржавый")
+    return "${tags.random()}-${Random.nextInt(100, 999)}"
+}

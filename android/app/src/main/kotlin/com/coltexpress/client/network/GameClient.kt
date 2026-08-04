@@ -9,6 +9,7 @@ import com.coltexpress.client.protocol.JoinRoom
 import com.coltexpress.client.protocol.ListRooms
 import com.coltexpress.client.protocol.MakeChoice
 import com.coltexpress.client.protocol.PlayAction
+import com.coltexpress.client.protocol.ResetSession
 import com.coltexpress.client.protocol.Say
 import com.coltexpress.client.protocol.ServerMessage
 import com.coltexpress.client.protocol.StartGame
@@ -64,6 +65,7 @@ class GameClient(
     suspend fun drawCards() = send(DrawCards)
     suspend fun makeChoice(choiceId: String, value: String) = send(MakeChoice(choiceId, value))
     suspend fun say(text: String) = send(Say(text))
+    suspend fun resetSession() = send(ResetSession)
 
     private suspend fun send(message: ClientMessage) {
         session?.send(Frame.Text(json.encodeToString(ClientMessage.serializer(), message)))

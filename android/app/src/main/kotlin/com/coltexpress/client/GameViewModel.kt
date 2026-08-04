@@ -39,6 +39,7 @@ import com.coltexpress.client.protocol.ServerMessage
 import com.coltexpress.client.protocol.SheriffMoved
 import com.coltexpress.client.protocol.Shot
 import com.coltexpress.client.protocol.ShotMissed
+import com.coltexpress.client.protocol.SessionReset
 import com.coltexpress.client.protocol.Welcome
 import java.io.File
 import java.net.HttpURLConnection
@@ -158,6 +159,10 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     fun connect(newNickname: String, serverAddress: String) {
         if (_connection.value is ConnectionState.Connected) return
         nickname = newNickname.trim().ifEmpty { "anonymous" }
+        getApplication<Application>().getSharedPreferences("colt", Context.MODE_PRIVATE).edit()
+            .putString("nickname", nickname)
+            .putString("serverAddress", serverAddress)
+            .apply()
         val url = normalizeServerUrl(serverAddress)
         currentHost = url.removePrefix("ws://").removePrefix("wss://").substringBefore('/')
         supervisorJob?.cancel()
@@ -181,6 +186,35 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 addLog("Доступна новая сборка клиента №$serverBuild (у вас $BUILD_NUMBER)")
             }
         }
+    }
+
+    fun restartSession() {
+        clearGameState()
+        addLog("Запрос на сброс сессии...")
+        if (_connection.value is ConnectionState.Connected) {
+            viewModelScope.launch { client.resetSession() }
+        }
+    }
+
+    /** Подключается автоматически при старте приложения: использует сохранённые ник и адрес. */
+    fun autoConnect(defaultNickname: String, defaultAddress: String) {
+        if (_connection.value is ConnectionState.Connected) return
+        val prefs = getApplication<Application>().getSharedPreferences("colt", Context.MODE_PRIVATE)
+        val savedNick = prefs.getString("nickname", "")?.trim().orEmpty()
+        val savedAddr = prefs.getString("serverAddress", "")?.trim().orEmpty()
+        connect(savedNick.ifEmpty { defaultNickname }, savedAddr.ifEmpty { defaultAddress })
+    }
+
+    private fun clearGameState() {
+        _hand.value = emptyList()
+        _ownBullets.value = 6
+        _deckSize.value = 0
+        _round.value = null
+        _currentTurn.value = null
+        _choice.value = null
+        _log.value = emptyList()
+        _gameOver.value = null
+        _board.value = null
     }
 
     private suspend fun connectionSupervisor() {
@@ -353,7 +387,15 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun handle(message: ServerMessage) {
         when (message) {
-            is Connected -> _connection.value = ConnectionState.Connected
+            is Connected -> {
+                _connection.value = ConnectionState.Connected
+                _myId.value = null
+                _myCharacter.value = null
+                _room.value = null
+                _rooms.value = emptyList()
+                clearGameState()
+                refreshRooms()
+            }
             is Welcome -> {
                 _myId.value = message.playerId
                 _myCharacter.value = message.character.ifEmpty { null }
@@ -412,6 +454,10 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
             is Chat -> _chat.value += ChatLine(message.nickname, message.text)
+            is SessionReset -> {
+                clearGameState()
+                addLog("Сессия сброшена. Все возвращаются в лобби.")
+            }
             is Error -> addLog("Ошибка: ${message.message}")
         }
     }

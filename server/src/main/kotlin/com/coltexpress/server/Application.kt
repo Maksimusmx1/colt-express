@@ -10,6 +10,7 @@ import com.coltexpress.server.protocol.JoinRoom
 import com.coltexpress.server.protocol.ListRooms
 import com.coltexpress.server.protocol.MakeChoice
 import com.coltexpress.server.protocol.PlayAction
+import com.coltexpress.server.protocol.ResetSession
 import com.coltexpress.server.protocol.Say
 import com.coltexpress.server.protocol.ServerMessage
 import com.coltexpress.server.protocol.StartGame
@@ -77,14 +78,21 @@ fun Application.module() {
                 for (frame in incoming) {
                     if (frame !is Frame.Text) continue
                     when (val message = DefaultJson.decodeFromString<ClientMessage>(frame.readText())) {
-                        is CreateRoom -> playerId = roomManager.createRoom(this, message.nickname, message.maxPlayers)
-                        is JoinRoom -> playerId = roomManager.joinRoom(this, message.roomId, message.nickname)
+                        is CreateRoom -> {
+                            playerId?.let { roomManager.leave(it) }
+                            playerId = roomManager.createRoom(this, message.nickname, message.maxPlayers)
+                        }
+                        is JoinRoom -> {
+                            playerId?.let { roomManager.leave(it) }
+                            playerId = roomManager.joinRoom(this, message.roomId, message.nickname)
+                        }
                         is ListRooms -> roomManager.listRooms(this)
                         is StartGame -> playerId?.let { roomManager.startGame(it) }
                         is PlayAction -> playerId?.let { roomManager.playAction(it, message.cardType) }
                         is DrawCards -> playerId?.let { roomManager.drawCards(it) }
                         is MakeChoice -> playerId?.let { roomManager.makeChoice(it, message.choiceId, message.value) }
                         is Say -> playerId?.let { roomManager.say(it, message.text) }
+                        is ResetSession -> playerId?.let { roomManager.resetSession(it) }
                     }
                 }
             } catch (e: Exception) {

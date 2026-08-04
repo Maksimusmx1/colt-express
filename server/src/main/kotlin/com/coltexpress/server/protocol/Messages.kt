@@ -46,6 +46,10 @@ data class Say(val text: String) : ClientMessage
 @SerialName("ListRooms")
 object ListRooms : ClientMessage
 
+@Serializable
+@SerialName("ResetSession")
+object ResetSession : ClientMessage
+
 // ===== Server -> Client =====
 
 @Serializable
@@ -176,6 +180,10 @@ data class PlayerResult(
 @Serializable
 @SerialName("Chat")
 data class Chat(val nickname: String, val text: String) : ServerMessage
+
+@Serializable
+@SerialName("SessionReset")
+object SessionReset : ServerMessage
 
 @Serializable
 @SerialName("Error")

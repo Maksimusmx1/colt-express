@@ -29,6 +29,7 @@ import com.coltexpress.server.protocol.RoomSummary
 import com.coltexpress.server.protocol.RoomUpdate
 import com.coltexpress.server.protocol.RoundStart
 import com.coltexpress.server.protocol.ServerMessage
+import com.coltexpress.server.protocol.SessionReset
 import com.coltexpress.server.protocol.Welcome
 import io.ktor.server.websocket.WebSocketServerSession
 import io.ktor.websocket.Frame
@@ -224,6 +225,16 @@ class RoomManager {
         val nickname = players[playerId]?.nickname ?: return
         val room = roomOf(playerId) ?: return
         sendToRoom(room, Chat(nickname, text))
+    }
+
+    /** Сбрасывает игру в комнате для всех: возвращает в лобби и сообщает каждому клиенту. */
+    suspend fun resetSession(playerId: String) {
+        val room = roomOf(playerId) ?: return
+        room.lock.withLock {
+            room.engine = null
+            sendToRoom(room, SessionReset)
+            sendToRoom(room, roomUpdate(room))
+        }
     }
 
     suspend fun leave(playerId: String) {
