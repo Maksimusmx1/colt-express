@@ -60,7 +60,7 @@ sealed interface ConnectionState {
     data object Connected : ConnectionState
 }
 
-const val BUILD_NUMBER = 4
+const val BUILD_NUMBER = 5
 
 private const val RECONNECT_DELAY_MS = 60_000L
 
@@ -456,6 +456,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             is Chat -> _chat.value += ChatLine(message.nickname, message.text)
             is SessionReset -> {
                 clearGameState()
+                _room.value = _room.value?.copy(phase = "LOBBY")
                 addLog("Сессия сброшена. Все возвращаются в лобби.")
             }
             is Error -> addLog("Ошибка: ${message.message}")
