@@ -128,8 +128,8 @@ fun GameScreen(viewModel: GameViewModel = viewModel()) {
 
     LaunchedEffect(Unit) {
         delay(500)
-        if (viewModel.connection.value is ConnectionState.Disconnected) {
-            viewModel.autoConnect(if (isEmu) botNickname() else "Бандит", serverAddress)
+        if (isEmu && viewModel.connection.value is ConnectionState.Disconnected) {
+            viewModel.autoConnect(botNickname(), serverAddress)
         }
     }
 
@@ -258,7 +258,9 @@ fun GameScreen(viewModel: GameViewModel = viewModel()) {
                         Text("Обновить клиент")
                     }
                 }
-                OutlinedButton(onClick = { viewModel.restartSession() }) { Text("Перезапустить сессию") }
+                if (isEmu && room?.ownerId == myId) {
+                    OutlinedButton(onClick = { viewModel.restartSession() }) { Text("Перезапустить сессию") }
+                }
             }
             if (updateAvailable) {
                 AlertDialog(

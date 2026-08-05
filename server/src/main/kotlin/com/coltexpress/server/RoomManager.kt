@@ -231,6 +231,10 @@ class RoomManager {
     suspend fun resetSession(playerId: String) {
         val room = roomOf(playerId) ?: return
         room.lock.withLock {
+            if (room.ownerId != playerId) {
+                sendToPlayer(playerId, Error("Only the room owner can reset the session"))
+                return
+            }
             room.engine = null
             sendToRoom(room, SessionReset)
             sendToRoom(room, roomUpdate(room))
