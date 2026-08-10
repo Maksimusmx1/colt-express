@@ -36,6 +36,11 @@ import io.ktor.websocket.Frame
 import io.ktor.websocket.send
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.withLock
 
 /**
@@ -48,6 +53,8 @@ class RoomManager {
     private val sessions = ConcurrentHashMap<String, WebSocketServerSession>()
     private val players = ConcurrentHashMap<String, Player>()
     private val playerRoom = ConcurrentHashMap<String, String>()
+    private val bots = ConcurrentHashMap.newKeySet<String>()
+    private val botScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     fun playerCount(): Int = players.size
 
@@ -75,27 +82,23 @@ class RoomManager {
         players.remove(playerId)
     }
 
-    /** Снимает игрока с комнаты. В лобби — обычный выход; если все участники отключились, комната удаляется. */
+    /** Снимает игрока с комнаты. В лобби — обычный выход; если все живые участники отключились, комната удаляется. */
     private suspend fun leaveRoomLocked(room: Room, playerId: String) {
         room.players.removeIf { it.id == playerId }
-        if (room.players.isEmpty()) {
+        if (room.players.isEmpty() || room.players.none { sessions.containsKey(it.id) }) {
             dropRoom(room.id)
             return
         }
         if (room.engine == null) {
             if (room.ownerId == playerId) room.ownerId = room.players.first().id
             sendToRoom(room, roomUpdate(room))
-            return
-        }
-        // Игра идёт, но все участники отключились — комнату можно удалить.
-        if (room.players.none { sessions.containsKey(it.id) }) {
-            dropRoom(room.id)
         }
     }
 
     private fun dropRoom(roomId: String) {
         rooms.remove(roomId)
         playerRoom.entries.removeIf { it.value == roomId }
+        bots.toList().forEach { id -> if (!playerRoom.containsKey(id)) { bots.remove(id); players.remove(id) } }
     }
 
     // ===== Вход в комнаты =====
@@ -111,9 +114,27 @@ class RoomManager {
         rooms[id] = room
         playerRoom[playerId] = id
         room.players.add(players.getValue(playerId))
+        addBots(room)
         session.sendMessage(Welcome(playerId, players.getValue(playerId).nickname, players.getValue(playerId).character))
         sendToRoom(room, roomUpdate(room))
         return playerId
+    }
+
+    /** Автоматически создаёт ботов и подключает их к только что созданной сессии. */
+    private fun addBots(room: Room) {
+        val usedChars = room.players.map { it.character }.toMutableSet()
+        var toAdd = minOf(BOT_COUNT, room.maxPlayers - room.players.size)
+        var index = 0
+        while (toAdd > 0) {
+            val character = CHARACTERS.filter { it !in usedChars }.random()
+            usedChars += character
+            val botId = UUID.randomUUID().toString()
+            players[botId] = Player(botId, "Бот-${++index}", character)
+            bots.add(botId)
+            playerRoom[botId] = room.id
+            room.players.add(players.getValue(botId))
+            toAdd--
+        }
     }
 
     suspend fun joinRoom(session: WebSocketServerSession, roomId: String, nickname: String): String? {
@@ -270,6 +291,48 @@ class RoomManager {
             sendToRoom(room, roomUpdate(room))
             sendToRoom(room, boardState(it))
         }
+        driveBots(room)
+    }
+
+    // ===== Боты =====
+
+    /**
+     * Если сейчас должен ходить бот — даёт ему случайный ход с небольшой задержкой.
+     * Вызывается после каждой отдачи обновлений, поэтому боты «просыпаются» сами.
+     */
+    private fun driveBots(room: Room) {
+        val engine = room.engine ?: return
+        val actor = engine.actorNeedingInput() ?: return
+        if (!bots.contains(actor)) return
+        botScope.launch {
+            delay(BOT_DELAY_MS)
+            val action = room.lock.withLock {
+                val e = room.engine ?: return@withLock null
+                when {
+                    e.pendingChoiceFor(actor) != null -> {
+                        val c = e.pendingChoiceFor(actor)!!
+                        BotAction.Choice(c.id, c.options.random())
+                    }
+                    e.canPlayAs(actor) -> {
+                        val cardType = e.player(actor)?.hand?.filterIsInstance<ActionCard>()?.randomOrNull()?.type?.name
+                        if (cardType != null) BotAction.Play(cardType) else BotAction.Draw
+                    }
+                    else -> null
+                }
+            }
+            when (action) {
+                is BotAction.Play -> playAction(actor, action.cardType)
+                is BotAction.Draw -> drawCards(actor)
+                is BotAction.Choice -> makeChoice(actor, action.choiceId, action.value)
+                null -> Unit
+            }
+        }
+    }
+
+    private sealed interface BotAction {
+        data class Play(val cardType: String) : BotAction
+        data object Draw : BotAction
+        data class Choice(val choiceId: String, val value: String) : BotAction
     }
 
     private fun boardState(engine: Engine): BoardState =
@@ -320,5 +383,11 @@ class RoomManager {
 
     companion object {
         private val CHARACTERS = listOf("Doc", "Django", "Cheyenne", "Belle", "Tuco", "Ghost")
+
+        /** Сколько ботов сервер автоматически добавляет в новую сессию. */
+        const val BOT_COUNT = 3
+
+        /** Пауза перед ходом бота, мс. */
+        const val BOT_DELAY_MS = 600L
     }
 }

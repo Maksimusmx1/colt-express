@@ -71,6 +71,15 @@ class Engine(
 
     fun player(id: String): PlayerState? = byId[id]
 
+    /** Может ли игрок сейчас сыграть карту в фазе планирования. */
+    fun canPlayAs(id: String): Boolean = phase == Phase.PLANNING && currentActor == id && pendingChoice == null
+
+    /** Активный выбор, требующий решения указанного игрока (или null). */
+    fun pendingChoiceFor(id: String): PendingChoice? = pendingChoice?.takeIf { it.playerId == id }
+
+    /** Игрок, которому сейчас нужно действовать (ход в планировании или выбор в ограблении), или null. */
+    fun actorNeedingInput(): String? = pendingChoice?.playerId ?: (if (phase == Phase.PLANNING) currentActor else null)
+
     fun abort() {
         phase = Phase.FINISHED
     }
