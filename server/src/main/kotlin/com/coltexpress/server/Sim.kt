@@ -48,6 +48,11 @@ object Sim {
                         else println("  plan ${u.playerId} draws")
                         next += res.second
                     }
+                    is EngineUpdate.PlanningChoice -> {
+                        val v = u.choice.options.first()
+                        println("  plan ${u.choice.playerId} chooses ${u.choice.kind} -> $v")
+                        next += engine.submitChoice(u.choice.playerId, u.choice.choiceId, v)
+                    }
                     is EngineUpdate.Robbery -> {
                         for (ev in u.events) {
                             events++

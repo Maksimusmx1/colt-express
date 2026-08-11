@@ -649,7 +649,7 @@ private fun GamePanel(
                     }
                 }
             }
-            if (myTurn) {
+            if (myTurn && round?.mode != "ON_THE_RUN") {
                 Button(onClick = { viewModel.draw() }) { Text("Взять 3 карты") }
             }
         }
@@ -718,11 +718,6 @@ private fun TrainCar(
     Column(Modifier.width(w)) {
         Box(Modifier.width(w).height(160.dp)) {
             Canvas(Modifier.fillMaxSize()) { drawCarBody(isLoc) }
-            if (isSheriff) {
-                Box(Modifier.align(Alignment.TopStart).padding(start = cabPad + 6.dp, top = 94.dp)) {
-                    SheriffFigure()
-                }
-            }
             if (car.roof.isNotEmpty()) {
                 Box(Modifier.align(Alignment.TopCenter).padding(start = cabPad, top = 52.dp)) {
                     Row(
@@ -736,13 +731,14 @@ private fun TrainCar(
                     }
                 }
             }
-            if (car.inside.isNotEmpty()) {
+            if (car.inside.isNotEmpty() || isSheriff) {
                 Box(Modifier.align(Alignment.TopCenter).padding(start = cabPad, top = 94.dp)) {
                     Row(
                         Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.Center,
                         verticalAlignment = Alignment.Bottom,
                     ) {
+                        if (isSheriff) SheriffFigure()
                         car.inside.forEach { id ->
                             MeepleFigure(characterColor(charById[id] ?: id), id == myId)
                         }

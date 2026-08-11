@@ -18,6 +18,7 @@ import kotlin.random.Random
 sealed interface EngineUpdate {
     data class RoundStarted(val round: Int, val mode: String, val turns: Int, val firstPlayerId: String) : EngineUpdate
     data class PlanningTurn(val playerId: String, val mode: String) : EngineUpdate
+    data class PlanningChoice(val choice: ChoiceRequired) : EngineUpdate
     data class Robbery(val events: List<GameEvent>, val choice: ChoiceRequired?) : EngineUpdate
     data class GameOver(val results: List<PlayerResult>, val winnerId: String) : EngineUpdate
 }
@@ -69,6 +70,10 @@ class Engine(
     private val eventBuffer = mutableListOf<GameEvent>()
     private var choiceCounter = 0
 
+    companion object {
+        private val ON_THE_RUN_OPTIONS = listOf("PLAY2", "DRAW6", "DRAW3_PLAY1")
+    }
+
     fun player(id: String): PlayerState? = byId[id]
 
     /** Может ли игрок сейчас сыграть карту в фазе планирования. */
@@ -93,10 +98,10 @@ class Engine(
         players.forEach { p ->
             p.hand.clear()
             p.deck.toMutableList().shuffled(random).let { p.deck.clear(); p.deck.addAll(it) }
-            val n = if (p.character == "Doc") 7 else 6
+            val n = 6
             draw(p, n)
-            println("[deal] round $currentRound ${p.nickname} (${p.character}): $n cards -> " +
-                p.hand.filterIsInstance<ActionCard>().joinToString { it.type.name })
+            println("[deal] round $currentRound ${p.nickname} (${p.character}): $n cards -> "
+                + p.hand.filterIsInstance<ActionCard>().joinToString { it.type.name })
         }
         playStack.clear()
         turnQueue.clear()
@@ -145,7 +150,9 @@ class Engine(
         val actor = turnQueue.removeFirst()
         currentActor = actor
         if (roundCard.mode == RoundMode.ON_THE_RUN) {
-            pendingPlays = 2
+            val choice = makeChoice(actor, ChoiceKind.ON_THE_RUN_OPTION, null, ON_THE_RUN_OPTIONS, "PLANNING")
+            pendingChoice = choice
+            return listOf(EngineUpdate.PlanningChoice(choice.toRequest()))
         }
         return listOf(EngineUpdate.PlanningTurn(actor, roundCard.mode.name))
     }
@@ -214,6 +221,11 @@ class Engine(
     fun submitChoice(playerId: String, choiceId: String, value: String): List<EngineUpdate> {
         val c = pendingChoice ?: return emptyList()
         if (c.playerId != playerId || c.id != choiceId || value !in c.options) return emptyList()
+        if (phase == Phase.PLANNING) {
+            if (c.kind != ChoiceKind.ON_THE_RUN_OPTION) return emptyList()
+            pendingChoice = null
+            return applyOnTheRunOption(value)
+        }
         pendingChoice = null
         val ctx = resolveCtx ?: return emptyList()
         val done = applyStep(ctx, value)
@@ -222,6 +234,23 @@ class Engine(
             resolveCtx = null
         }
         return continueRobbery()
+    }
+
+    /** Применяет выбранный вариант «Разгона» (2 действия игрока). */
+    private fun applyOnTheRunOption(value: String): List<EngineUpdate> {
+        val p = byId[currentActor ?: return emptyList()] ?: return emptyList()
+        when (value) {
+            "PLAY2" -> pendingPlays = 2
+            "DRAW6" -> {
+                draw(p, 6)
+                pendingPlays = 0
+            }
+            "DRAW3_PLAY1" -> {
+                draw(p, 3)
+                pendingPlays = 1
+            }
+        }
+        return advancePlanning()
     }
 
     // ===== Разрешение одной карты =====
@@ -389,23 +418,9 @@ class Engine(
     private fun applyPunchMove(victimId: String, value: String) {
         val victim = byId.getValue(victimId)
         val from = victim.car
-        if (value == "ROOF") {
-            val car = cars[victim.car]
-            if (victim.onRoof) {
-                car.roof.remove(victim.id)
-                car.inside.add(victim.id)
-                victim.onRoof = false
-            } else {
-                car.inside.remove(victim.id)
-                car.roof.add(victim.id)
-                victim.onRoof = true
-            }
-            eventBuffer += BanditMoved(victim.id, from, from, victim.onRoof)
-        } else {
-            val to = (from + parseDelta(value)).coerceIn(0, cars.lastIndex)
-            movePlayer(victim, to)
-            eventBuffer += BanditMoved(victim.id, from, to, victim.onRoof)
-        }
+        val to = (from + parseDelta(value)).coerceIn(0, cars.lastIndex)
+        movePlayer(victim, to)
+        eventBuffer += BanditMoved(victim.id, from, to, victim.onRoof)
         if (!victim.onRoof) sheriffEncounter()
     }
 
@@ -469,8 +484,8 @@ class Engine(
                 if (!blocked) targets += cars[c].roof.toList()
             }
         } else {
-            if (p.car > 0) targets += cars[p.car - 1].inside + cars[p.car - 1].roof
-            if (p.car < cars.lastIndex) targets += cars[p.car + 1].inside + cars[p.car + 1].roof
+            if (p.car > 0) targets += cars[p.car - 1].inside
+            if (p.car < cars.lastIndex) targets += cars[p.car + 1].inside
         }
         return eligibleTargets(targets)
     }
@@ -480,18 +495,13 @@ class Engine(
         return eligibleTargets(set.filter { it != p.id })
     }
 
-    /** Если кроме Красотки есть другая возможная цель, Красотка не может быть целью. */
-    private fun eligibleTargets(targets: List<String>): List<String> {
-        if (targets.size <= 1) return targets
-        val belle = targets.firstOrNull { byId[it]?.character == "Belle" }
-        return if (belle != null) targets.filter { it != belle } else targets
-    }
+    /** Возвращает цели без учёта способностей персонажей (стандартные правила). */
+    private fun eligibleTargets(targets: List<String>): List<String> = targets
 
     private fun punchDirections(victim: PlayerState): List<String> {
         val opts = mutableListOf<String>()
         if (victim.car > 0) opts += "B"
         if (victim.car < cars.lastIndex) opts += "F"
-        opts += "ROOF"
         return opts
     }
 
@@ -537,7 +547,10 @@ class Engine(
 
     private fun orderForMode(): List<String> {
         val cw = clockwiseOrder(firstPlayer)
-        return if (roundCard.mode == RoundMode.TURN_BACK) cw.reversed() else cw
+        if (roundCard.mode == RoundMode.TURN_BACK) {
+            return listOf(firstPlayer) + cw.filter { it != firstPlayer }.reversed()
+        }
+        return cw
     }
 
     private fun clockwiseOrder(start: String): List<String> {

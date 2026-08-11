@@ -280,6 +280,7 @@ class RoomManager {
                     sendToRoom(room, PlanningTurnMsg(update.playerId, update.mode))
                     sendToPlayer(update.playerId, handUpdate(engine, update.playerId))
                 }
+                is EngineUpdate.PlanningChoice -> sendChoice(room, update.choice)
                 is EngineUpdate.Robbery -> {
                     update.events.forEach { sendToRoom(room, GameEventMsg(it)) }
                     update.choice?.let { sendChoice(room, it) }

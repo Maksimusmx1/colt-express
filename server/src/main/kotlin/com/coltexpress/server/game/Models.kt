@@ -14,6 +14,7 @@ enum class ChoiceKind {
     PUNCH_VICTIM,
     PUNCH_LOOT,
     PUNCH_DIRECTION,
+    ON_THE_RUN_OPTION,
 }
 
 data class RoundCard(val turns: Int, val mode: RoundMode)
