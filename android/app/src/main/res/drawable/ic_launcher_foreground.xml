@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Золотая рамка -->
+    <path
+        android:fillColor="#D4A017"
+        android:pathData="M6,6L102,6L102,102L6,102Z"
+        android:strokeWidth="2"
+        android:strokeColor="#D4A017" />
+    <path
+        android:fillColor="#8C2F24"
+        android:pathData="M8,8L100,8L100,100L8,100Z" />
+    <!-- Револьвер ствол вправо -->
+    <path
+        android:fillColor="#D4A017"
+        android:pathData="M62,48L82,48L82,52L62,52Z" />
+    <path
+        android:fillColor="#D4A017"
+        android:pathData="M80,46L86,50L80,54Z" />
+    <!-- Рукоять револьвера -->
+    <path
+        android:fillColor="#D4A017"
+        android:pathData="M58,52L64,52L62,64L56,64Z" />
+    <!-- Барабан -->
+    <path
+        android:fillColor="#D4A017"
+        android:pathData="M55,46 A7,7 0 1,1 55,54 A7,7 0 1,1 55,46Z" />
+    <path
+        android:fillColor="#8C2F24"
+        android:pathData="M55,48 A5,5 0 1,1 55,52 A5,5 0 1,1 55,48Z" />
+    <!-- Colt текст -->
+    <path
+        android:fillColor="#D4A017"
+        android:pathData="M14,30L16,30L16,24L22,24L22,30L24,30L24,22L14,22Z" />
+    <path
+        android:fillColor="#D4A017"
+        android:pathData="M27,22L29,22L29,30L27,30Z" />
+    <path
+        android:fillColor="#D4A017"
+        android:pathData="M32,22L40,22L40,24L34,24L34,25L39,25L39,27L34,27L34,30L40,30L40,32L32,32Z" />
+    <path
+        android:fillColor="#D4A017"
+        android:pathData="M43,22L51,22L51,24L47,24L47,32L45,32L45,24L43,24Z" />
+    <!-- Express текст -->
+    <path
+        android:fillColor="#F2E9D4"
+        android:pathData="M14,62L16,62L16,56L22,56L22,62L24,62L24,54L14,54Z" />
+    <path
+        android:fillColor="#F2E9D4"
+        android:pathData="M27,54L33,54L33,56L29,56L29,57L32,57L32,59L29,59L29,62L33,62L33,64L27,64Z" />
+    <path
+        android:fillColor="#F2E9D4"
+        android:pathData="M36,54L38,54L38,62L36,62Z" />
+    <path
+        android:fillColor="#F2E9D4"
+        android:pathData="M41,54L47,54L47,56L43,56L43,57L46,57L46,59L43,59L43,62L47,62L47,64L41,64Z" />
+    <path
+        android:fillColor="#F2E9D4"
+        android:pathData="M50,54L52,54L52,62L50,62Z" />
+    <path
+        android:fillColor="#F2E9D4"
+        android:pathData="M55,54L61,54L61,56L57,56L57,57L60,57L60,59L57,59L57,62L61,62L61,64L55,64Z" />
+    <path
+        android:fillColor="#F2E9D4"
+        android:pathData="M64,54L72,54L72,56L66,56L66,58L71,58L71,60L66,60L66,62L72,62L72,64L64,64Z" />
+    <!-- Звезда шерифа -->
+    <path
+        android:fillColor="#D4A017"
+        android:pathData="M54,72L56,78L62,78L57,82L59,88L54,84L49,88L51,82L46,78L52,78Z" />
+    <!-- Пули декоративные -->
+    <path
+        android:fillColor="#D4A017"
+        android:pathData="M20,76 A2,2 0 1,1 20,80 A2,2 0 1,1 20,76Z" />
+    <path
+        android:fillColor="#D4A017"
+        android:pathData="M88,76 A2,2 0 1,1 88,80 A2,2 0 1,1 88,76Z" />
+    <path
+        android:fillColor="#D4A017"
+        android:pathData="M20,38 A2,2 0 1,1 20,42 A2,2 0 1,1 20,38Z" />
+    <path
+        android:fillColor="#D4A017"
+        android:pathData="M88,38 A2,2 0 1,1 88,42 A2,2 0 1,1 88,38Z" />
+</vector>

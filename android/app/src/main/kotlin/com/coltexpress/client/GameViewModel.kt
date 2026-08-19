@@ -44,6 +44,7 @@ import com.coltexpress.client.protocol.Welcome
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
+import javax.net.ssl.HttpsURLConnection
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -60,7 +61,7 @@ sealed interface ConnectionState {
     data object Connected : ConnectionState
 }
 
-const val BUILD_NUMBER = 5
+val BUILD_NUMBER: Int get() = BuildConfig.BUILD_NUMBER
 
 private const val RECONNECT_DELAY_MS = 60_000L
 
@@ -81,6 +82,7 @@ data class RoomListItem(
 )
 
 data class HandCard(val uid: String, val type: String)
+data class PlayedCardEntry(val character: String, val cardType: String, val faceDown: Boolean)
 
 data class ChatLine(val sender: String, val text: String, val isLocal: Boolean = false)
 
@@ -100,6 +102,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     private var nickname = ""
 
     private var currentHost: String? = null
+    private var currentIsTls = false
 
     private var supervisorJob: Job? = null
     private var eventsJob: Job? = null
@@ -124,14 +127,29 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     private val _deckSize = MutableStateFlow(0)
     val deckSize: StateFlow<Int> = _deckSize.asStateFlow()
 
+    private val _loot = MutableStateFlow<List<String>>(emptyList())
+    val loot: StateFlow<List<String>> = _loot.asStateFlow()
+
     private val _round = MutableStateFlow<RoundStart?>(null)
     val round: StateFlow<RoundStart?> = _round.asStateFlow()
 
     private val _currentTurn = MutableStateFlow<String?>(null)
     val currentTurn: StateFlow<String?> = _currentTurn.asStateFlow()
 
+    private val _turnIndex = MutableStateFlow(0)
+    val turnIndex: StateFlow<Int> = _turnIndex.asStateFlow()
+
+    private val _currentTurnMode = MutableStateFlow("")
+    val currentTurnMode: StateFlow<String> = _currentTurnMode.asStateFlow()
+
+    private val _playedCards = MutableStateFlow<List<PlayedCardEntry>>(emptyList())
+    val playedCards: StateFlow<List<PlayedCardEntry>> = _playedCards.asStateFlow()
+
     private val _choice = MutableStateFlow<ChoiceRequired?>(null)
     val choice: StateFlow<ChoiceRequired?> = _choice.asStateFlow()
+
+    private val _faceDownAvailable = MutableStateFlow(false)
+    val faceDownAvailable: StateFlow<Boolean> = _faceDownAvailable.asStateFlow()
 
     private val _log = MutableStateFlow<List<String>>(emptyList())
     val log: StateFlow<List<String>> = _log.asStateFlow()
@@ -165,6 +183,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             .apply()
         val url = normalizeServerUrl(serverAddress)
         currentHost = url.removePrefix("ws://").removePrefix("wss://").substringBefore('/')
+        currentIsTls = url.startsWith("wss://")
         supervisorJob?.cancel()
         eventsJob?.cancel()
         client.disconnect()
@@ -209,9 +228,11 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         _hand.value = emptyList()
         _ownBullets.value = 6
         _deckSize.value = 0
+        _loot.value = emptyList()
         _round.value = null
         _currentTurn.value = null
         _choice.value = null
+        _faceDownAvailable.value = false
         _log.value = emptyList()
         _gameOver.value = null
         _board.value = null
@@ -258,7 +279,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 addLog("Загрузка обновления с $host...")
                 val context = getApplication<Application>()
                 val file = File(context.cacheDir, "colt-express-update.apk")
-                downloadApk("http://$host/apk", file)
+                downloadApk("${if (currentIsTls) "https" else "http"}://$host/apk", file)
                 _updateProgress.value = null
                 installApk(context, file)
             } catch (e: Exception) {
@@ -269,33 +290,46 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private suspend fun downloadApk(url: String, file: File) = withContext(Dispatchers.IO) {
-        val conn = URL(url).openConnection() as HttpURLConnection
-        try {
-            conn.connectTimeout = 10000
-            conn.readTimeout = 60000
-            conn.instanceFollowRedirects = true
-            val code = conn.responseCode
-            if (code != HttpURLConnection.HTTP_OK) {
-                throw RuntimeException("HTTP $code")
-            }
-            val total = conn.contentLengthLong.takeIf { it > 0 }
-            val buf = ByteArray(DEFAULT_BUFFER_SIZE)
-            file.outputStream().use { output ->
-                conn.inputStream.use { input ->
-                    var read: Int
-                    var done = 0L
-                    while (input.read(buf).also { read = it } != -1) {
-                        output.write(buf, 0, read)
-                        done += read
-                        if (total != null) {
-                            _updateProgress.value = (done.toFloat() / total).coerceIn(0f, 1f)
+        val conn = URL(url).openConnection()
+        if (conn is HttpsURLConnection) {
+            val trustAllCerts = arrayOf<javax.net.ssl.TrustManager>(object : javax.net.ssl.X509TrustManager {
+                override fun checkClientTrusted(chain: Array<java.security.cert.X509Certificate>, authType: String) {}
+                override fun checkServerTrusted(chain: Array<java.security.cert.X509Certificate>, authType: String) {}
+                override fun getAcceptedIssuers(): Array<java.security.cert.X509Certificate> = arrayOf()
+            })
+            val sslContext = javax.net.ssl.SSLContext.getInstance("TLS")
+            sslContext.init(null, trustAllCerts, java.security.SecureRandom())
+            conn.sslSocketFactory = sslContext.socketFactory
+            conn.hostnameVerifier = javax.net.ssl.HostnameVerifier { _, _ -> true }
+        }
+        if (conn is HttpURLConnection) {
+            try {
+                conn.connectTimeout = 10000
+                conn.readTimeout = 60000
+                conn.instanceFollowRedirects = true
+                val code = conn.responseCode
+                if (code != HttpURLConnection.HTTP_OK) {
+                    throw RuntimeException("HTTP $code")
+                }
+                val total = conn.contentLengthLong.takeIf { it > 0 }
+                val buf = ByteArray(DEFAULT_BUFFER_SIZE)
+                file.outputStream().use { output ->
+                    conn.inputStream.use { input ->
+                        var read: Int
+                        var done = 0L
+                        while (input.read(buf).also { read = it } != -1) {
+                            output.write(buf, 0, read)
+                            done += read
+                            if (total != null) {
+                                _updateProgress.value = (done.toFloat() / total).coerceIn(0f, 1f)
+                            }
                         }
                     }
                 }
+                _updateProgress.value = 1f
+            } finally {
+                conn.disconnect()
             }
-            _updateProgress.value = 1f
-        } finally {
-            conn.disconnect()
         }
     }
 
@@ -312,8 +346,9 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         }
         if (!signaturesMatch(context, file)) {
             val host = currentHost ?: "сервер"
+            val scheme = if (currentIsTls) "https" else "http"
             addLog("Новую версию нельзя установить поверх старой (разные подписи). " +
-                "Удалите «Colt Express» на устройстве, затем откройте в браузере http://$host/apk " +
+                "Удалите «Colt Express» на устройстве, затем откройте в браузере $scheme://$host/apk " +
                 "и установите скачанный файл.")
             return
         }
@@ -360,8 +395,8 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { client.startGame() }
     }
 
-    fun play(cardType: String) {
-        viewModelScope.launch { client.playAction(cardType) }
+    fun play(cardType: String, faceDown: Boolean = false) {
+        viewModelScope.launch { client.playAction(cardType, faceDown) }
     }
 
     fun draw() {
@@ -419,22 +454,30 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             }
             is RoundStart -> {
                 _round.value = message
+                _faceDownAvailable.value = false
+                _playedCards.value = emptyList()
                 _room.value = _room.value?.copy(phase = "PLANNING")
-                addLog("Раунд ${message.round}: ${message.mode}, ходов: ${message.turns}. Первый: ${name(message.firstPlayerId)}")
+                addLog("Раунд ${message.round}: ${message.mode}, ходов: ${message.turns}. Первый: ${roleName(message.firstPlayerId)}")
             }
             is PlanningTurnMsg -> {
                 _currentTurn.value = message.playerId
+                _turnIndex.value = message.turnIndex
+                _currentTurnMode.value = message.mode
                 _choice.value = null
-                addLog("Планирование: ${name(message.playerId)}")
+                _faceDownAvailable.value = message.faceDownAvailable
+                addLog("Планирование: ${roleName(message.playerId)}")
             }
             is CardPlayed -> {
                 val what = if (message.faceDown) "карту рубашкой вверх" else cardName(message.cardType ?: "")
-                addLog("${name(message.playerId)} играет $what")
+                addLog("${roleName(message.playerId)} играет $what")
+                val character = _characters.value[message.playerId] ?: message.playerId
+                _playedCards.value = _playedCards.value + PlayedCardEntry(character, message.cardType ?: "?", message.faceDown)
             }
             is HandUpdate -> {
                 _hand.value = message.hand.map { HandCard(it.uid, it.type) }
                 _deckSize.value = message.deckSize
                 _ownBullets.value = message.ownBullets
+                _loot.value = message.loot
             }
             is BoardState -> _board.value = message
             is ChoiceRequired -> {
@@ -442,13 +485,27 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 if (message.playerId == _myId.value) {
                     addLog("Выбор: ${choiceKindName(message.kind)}")
                 } else {
-                    addLog("Ожидание: ${name(message.playerId)} выбирает ${choiceKindName(message.kind)}")
+                    addLog("Ожидание: ${roleName(message.playerId)} выбирает ${choiceKindName(message.kind)}")
                 }
             }
-            is GameEventMsg -> addLog(describe(message.event))
+            is GameEventMsg -> {
+                addLog(describe(message.event))
+                if (message.event is Shot && message.event.shooterId == _myId.value) {
+                    _ownBullets.value = (_ownBullets.value - 1).coerceAtLeast(0)
+                }
+                if (message.event is LootTaken && message.event.playerId == _myId.value) {
+                    _loot.value = _loot.value + message.event.lootType
+                }
+                if (message.event is LootDropped && message.event.playerId == _myId.value) {
+                    val list = _loot.value.toMutableList()
+                    val idx = list.indexOf(message.event.lootType)
+                    if (idx >= 0) list.removeAt(idx)
+                    _loot.value = list
+                }
+            }
             is GameEnded -> {
                 _gameOver.value = message
-                addLog("Игра окончена. Победитель: ${name(message.winnerId)}")
+                addLog("Игра окончена. Победитель: ${roleName(message.winnerId)}")
                 message.results.forEach { r ->
                     addLog("  ${r.nickname}: добыча=${r.lootSum} пули=${r.bulletsLeft} приз=${if (r.accuracyPrize) "+1000" else ""} итог=${r.total}")
                 }
@@ -464,20 +521,21 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun describe(event: GameEvent): String = when (event) {
-        is CardRevealed -> "Вскрытие: ${name(event.playerId)} сыграл ${cardName(event.cardType)}"
+        is CardRevealed -> "Вскрытие: ${roleName(event.playerId)} сыграл ${cardName(event.cardType)}"
         is BanditMoved -> {
             val where = if (event.onRoof) "крыша" else "внутри"
-            "${name(event.playerId)} перемещается в вагон ${event.toCar} ($where)"
+            "${roleName(event.playerId)} перемещается в вагон ${event.toCar} ($where)"
         }
-        is BanditRoofed -> "${name(event.playerId)} ${if (event.climbedUp) "забирается на крышу" else "спускается с крыши"} вагона ${event.car}"
-        is Shot -> "${name(event.shooterId)} стреляет в ${roleName(event.targetId)}"
-        is ShotMissed -> "${name(event.shooterId)} промахивается"
-        is Punched -> "${name(event.actorId)} бьёт ${roleName(event.targetId)}"
-        is LootDropped -> "${name(event.playerId)} бросает ${lootName(event.lootType)} в вагоне ${event.car}"
-        is LootTaken -> "${name(event.playerId)} забирает ${lootName(event.lootType)} из вагона ${event.car}"
-        is SheriffMoved -> "Шериф переходит в вагон ${event.to}"
-        is BulletReceived -> if (event.neutral) "${name(event.playerId)} получает пулю от шерифа" else "${name(event.playerId)} получает пулю от ${roleName(event.fromId ?: "")}"
-        is DrawAction -> "${name(event.playerId)} берёт карты"
+        is BanditRoofed -> "${roleName(event.playerId)} ${if (event.climbedUp) "забирается на крышу" else "спускается с крыши"} вагона ${event.car}"
+        is Shot -> "${roleName(event.shooterId)} стреляет в ${roleName(event.targetId)}"
+        is ShotMissed -> "${roleName(event.shooterId)} промахивается"
+        is Punched -> "${roleName(event.actorId)} бьёт ${roleName(event.targetId)}"
+        is LootDropped -> "${roleName(event.playerId)} бросает ${lootName(event.lootType)} в вагоне ${event.car}"
+        is LootTaken -> "${roleName(event.playerId)} забирает ${lootName(event.lootType)} из вагона ${event.car}"
+
+        is BulletReceived -> if (event.neutral) "${roleName(event.playerId)} получает пулю от шерифа" else "${roleName(event.playerId)} получает пулю от ${roleName(event.fromId ?: "")}"
+        is DrawAction -> "${roleName(event.playerId)} берёт карты"
+        is SheriffMoved -> "Шериф перемещается в вагон ${event.to}"
     }
 
     private fun name(id: String): String = _players.value[id] ?: id
@@ -508,17 +566,19 @@ internal fun choiceKindName(kind: String): String = when (kind) {
     "MARSHAL_DIRECTION" -> "направление шерифа"
     "PUNCH_VICTIM" -> "жертву удара"
     "PUNCH_LOOT" -> "добычу"
+    "PUNCH_TAKE" -> "забрать упавшую добычу"
     "PUNCH_DIRECTION" -> "направление"
-    "ON_THE_RUN_OPTION" -> "вариант действия"
+    "DOUBLE_OPTION" -> "вариант действия"
     else -> kind
 }
 
 internal fun choiceOptionLabel(opt: String, kind: String = "", players: List<Player> = emptyList()): String = when {
-    opt == "B" -> "Назад"
-    opt == "F" -> "Вперёд"
-    opt == "ROOF" -> "На крышу / в вагон"
-    opt.matches(Regex("B\\d")) -> "Назад ${opt.drop(1)}"
-    opt.matches(Regex("F\\d")) -> "Вперёд ${opt.drop(1)}"
+    opt == "B" -> "Влево"
+    opt == "F" -> "Вправо"
+    opt == "TAKE" -> "Забрать"
+    opt == "LEAVE" -> "Оставить на месте"
+    opt.matches(Regex("B\\d")) -> "Влево ${opt.drop(1)}"
+    opt.matches(Regex("F\\d")) -> "Вправо ${opt.drop(1)}"
     opt == "PLAY2" -> "Сыграть 2 карты"
     opt == "DRAW6" -> "Взять 6 карт"
     opt == "DRAW3_PLAY1" -> "Взять 3, сыграть 1"
@@ -545,12 +605,14 @@ internal fun characterName(character: String): String = when (character) {
 }
 
 private fun normalizeServerUrl(input: String): String {
-    val host = input
-        .trim()
+    val raw = input.trim()
+    val isTls = raw.startsWith("wss://") || raw.startsWith("https://")
+    val host = raw
         .removePrefix("ws://")
         .removePrefix("wss://")
         .removePrefix("http://")
         .removePrefix("https://")
         .trimEnd('/')
-    return if (host.endsWith("/ws")) "ws://$host" else "ws://$host/ws"
+    val scheme = if (isTls) "wss" else "ws"
+    return if (host.endsWith("/ws")) "${scheme}://${host}" else "${scheme}://${host}/ws"
 }

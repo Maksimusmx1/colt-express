@@ -17,6 +17,9 @@ server-run.log
 server-run-err.log
 *.log
 
+# Deploy artifacts
+deploy/vps/dist/
+
 # OS
 .DS_Store
 Thumbs.db

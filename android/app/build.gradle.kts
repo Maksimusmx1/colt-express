@@ -13,13 +13,27 @@ android {
         applicationId = "com.coltexpress.client"
         minSdk = 26
         targetSdk = 35
-        versionCode = 3
+        versionCode = 72
         versionName = "0.1.0"
+        buildConfigField("int", "BUILD_NUMBER", "${versionCode}")
+    }
+
+    signingConfigs {
+        create("release") {
+            storeFile = file("../colt-express.jks")
+            storePassword = "colt123"
+            keyAlias = "colt"
+            keyPassword = "colt123"
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("release")
+        }
+        debug {
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 
@@ -32,6 +46,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 

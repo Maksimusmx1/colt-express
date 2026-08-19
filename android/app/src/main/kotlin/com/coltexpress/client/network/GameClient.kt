@@ -18,10 +18,14 @@ import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.websocket.WebSockets
 import io.ktor.client.plugins.websocket.webSocket
 import io.ktor.client.plugins.websocket.ClientWebSocketSession
+import io.ktor.client.request.get
+import io.ktor.client.statement.bodyAsText
 import io.ktor.websocket.Frame
 import io.ktor.websocket.readText
-import java.net.HttpURLConnection
-import java.net.URL
+import java.security.SecureRandom
+import java.security.cert.X509Certificate
+import javax.net.ssl.SSLContext
+import javax.net.ssl.X509TrustManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -31,7 +35,23 @@ import kotlinx.coroutines.withContext
 class GameClient(
     private val url: String = DEFAULT_URL,
 ) {
+    private val trustAllCerts = object : X509TrustManager {
+        override fun checkClientTrusted(chain: Array<X509Certificate>, authType: String) {}
+        override fun checkServerTrusted(chain: Array<X509Certificate>, authType: String) {}
+        override fun getAcceptedIssuers(): Array<X509Certificate> = arrayOf()
+    }
+
+    private val sslContext = SSLContext.getInstance("TLS").apply {
+        init(null, arrayOf(trustAllCerts), SecureRandom())
+    }
+
     private val client = HttpClient(OkHttp) {
+        engine {
+            config {
+                sslSocketFactory(sslContext.socketFactory, trustAllCerts)
+                hostnameVerifier { _, _ -> true }
+            }
+        }
         install(WebSockets)
     }
 
@@ -43,7 +63,6 @@ class GameClient(
 
     val isConnected: Boolean get() = session != null
 
-    /** Runs while connected; returns when the socket closes. */
     suspend fun connect() {
         client.webSocket(url) {
             this@GameClient.session = this
@@ -61,7 +80,7 @@ class GameClient(
     suspend fun joinRoom(roomId: String, nickname: String) = send(JoinRoom(roomId, nickname))
     suspend fun listRooms() = send(ListRooms)
     suspend fun startGame() = send(StartGame)
-    suspend fun playAction(cardType: String) = send(PlayAction(cardType))
+    suspend fun playAction(cardType: String, faceDown: Boolean = false) = send(PlayAction(cardType, faceDown))
     suspend fun drawCards() = send(DrawCards)
     suspend fun makeChoice(choiceId: String, value: String) = send(MakeChoice(choiceId, value))
     suspend fun say(text: String) = send(Say(text))
@@ -71,7 +90,6 @@ class GameClient(
         session?.send(Frame.Text(json.encodeToString(ClientMessage.serializer(), message)))
     }
 
-    /** Fetches the client build number that the server distributes via /apk. */
     suspend fun fetchServerBuild(): Int? {
         val base = url
             .replaceFirst("ws://", "http://")
@@ -79,17 +97,8 @@ class GameClient(
             .substringBeforeLast('/')
         return withContext(Dispatchers.IO) {
             try {
-                val conn = URL("$base/health").openConnection() as HttpURLConnection
-                try {
-                    conn.connectTimeout = 5000
-                    conn.readTimeout = 5000
-                    if (conn.responseCode != HttpURLConnection.HTTP_OK) return@withContext null
-                    conn.inputStream.bufferedReader().use { reader ->
-                        json.decodeFromString<Health>(reader.readText()).buildNumber
-                    }
-                } finally {
-                    conn.disconnect()
-                }
+                val text = client.get("$base/health").bodyAsText()
+                json.decodeFromString<Health>(text).buildNumber
             } catch (e: Exception) {
                 null
             }

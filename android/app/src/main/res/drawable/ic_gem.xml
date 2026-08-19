@@ -1,0 +1,39 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="20dp"
+    android:height="20dp"
+    android:viewportWidth="20"
+    android:viewportHeight="20">
+
+    <!-- Основная форма: гранёный алмаз -->
+    <path
+        android:pathData="M10,1 L19,8 L10,19 L1,8 Z"
+        android:fillColor="#C62828"
+        android:strokeColor="#4A0000"
+        android:strokeWidth="0.8" />
+
+    <!-- Корона: верхняя левая грань (светлая) -->
+    <path
+        android:pathData="M10,1 L1,8 L10,8 Z"
+        android:fillColor="#EF5350" />
+
+    <!-- Корона: верхняя правая грань -->
+    <path
+        android:pathData="M10,1 L19,8 L10,8 Z"
+        android:fillColor="#E53935" />
+
+    <!-- Павильон: нижняя левая грань -->
+    <path
+        android:pathData="M1,8 L10,8 L10,19 Z"
+        android:fillColor="#B71C1C" />
+
+    <!-- Павильон: нижняя правая грань (самая тёмная) -->
+    <path
+        android:pathData="M19,8 L10,8 L10,19 Z"
+        android:fillColor="#8E0000" />
+
+    <!-- Блик на верхних гранях -->
+    <path
+        android:pathData="M7,4 L10,1 L13,4 L10,5.5 Z"
+        android:fillColor="#FF8A80"
+        android:fillAlpha="0.5" />
+</vector>

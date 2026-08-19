@@ -7,8 +7,8 @@ import com.coltexpress.server.game.EngineUpdate
 import com.coltexpress.server.game.GameCard
 import com.coltexpress.server.game.MemberSpec
 import com.coltexpress.server.game.PlayerState
-import com.coltexpress.server.game.RoundMode
 import com.coltexpress.server.game.Setup
+import com.coltexpress.server.protocol.BanditInfo
 import com.coltexpress.server.protocol.BoardCar
 import com.coltexpress.server.protocol.BoardState
 import com.coltexpress.server.protocol.CardInHand
@@ -120,10 +120,10 @@ class RoomManager {
         return playerId
     }
 
-    /** Автоматически создаёт ботов и подключает их к только что созданной сессии. */
+    /** Автоматически заполняет комнату ботами до maxPlayers (для игры 1 живого против ботов). */
     private fun addBots(room: Room) {
         val usedChars = room.players.map { it.character }.toMutableSet()
-        var toAdd = minOf(BOT_COUNT, room.maxPlayers - room.players.size)
+        var toAdd = room.maxPlayers - room.players.size
         var index = 0
         while (toAdd > 0) {
             val character = CHARACTERS.filter { it !in usedChars }.random()
@@ -199,17 +199,16 @@ class RoomManager {
         }
     }
 
-    suspend fun playAction(playerId: String, cardType: String) {
+    suspend fun playAction(playerId: String, cardType: String, faceDown: Boolean = false) {
         val room = roomOf(playerId) ?: return
         room.lock.withLock {
             val engine = room.engine ?: return
-            val result = engine.playCard(playerId, cardType)
+            val result = engine.playCard(playerId, cardType, faceDown)
             if (!result.played) {
                 sendToPlayer(playerId, Error("Cannot play $cardType right now"))
                 return
             }
-            val faceDown = engine.roundCard.mode == RoundMode.TUNNEL
-            sendToRoom(room, CardPlayed(playerId, if (faceDown) null else cardType, faceDown))
+            sendToRoom(room, CardPlayed(playerId, if (result.faceDown) null else cardType, result.faceDown))
             sendToPlayer(playerId, handUpdate(engine, playerId))
             dispatch(room, result.updates)
         }
@@ -273,11 +272,11 @@ class RoomManager {
             val engine = room.engine ?: continue
             when (update) {
                 is EngineUpdate.RoundStarted -> {
-                    sendToRoom(room, RoundStart(update.round, update.mode, update.turns, update.firstPlayerId))
+                    sendToRoom(room, RoundStart(update.round, update.mode, update.turns, update.firstPlayerId, update.modes))
                     room.players.forEach { sendToPlayer(it.id, handUpdate(engine, it.id)) }
                 }
                 is EngineUpdate.PlanningTurn -> {
-                    sendToRoom(room, PlanningTurnMsg(update.playerId, update.mode))
+                    sendToRoom(room, PlanningTurnMsg(update.playerId, update.mode, update.faceDownAvailable, update.turnIndex))
                     sendToPlayer(update.playerId, handUpdate(engine, update.playerId))
                 }
                 is EngineUpdate.PlanningChoice -> sendChoice(room, update.choice)
@@ -305,6 +304,8 @@ class RoomManager {
         val engine = room.engine ?: return
         val actor = engine.actorNeedingInput() ?: return
         if (!bots.contains(actor)) return
+        val char = engine.player(actor)?.character ?: "?"
+        println("[driveBots] actor=$char phase=${engine.phase} canPlay=${engine.canPlayAs(actor)}")
         botScope.launch {
             delay(BOT_DELAY_MS)
             val action = room.lock.withLock {
@@ -322,10 +323,10 @@ class RoomManager {
                 }
             }
             when (action) {
-                is BotAction.Play -> playAction(actor, action.cardType)
-                is BotAction.Draw -> drawCards(actor)
-                is BotAction.Choice -> makeChoice(actor, action.choiceId, action.value)
-                null -> Unit
+                is BotAction.Play -> { println("[driveBots] $char plays ${action.cardType}"); playAction(actor, action.cardType) }
+                is BotAction.Draw -> { println("[driveBots] $char draws"); drawCards(actor) }
+                is BotAction.Choice -> { println("[driveBots] $char chooses ${action.value}"); makeChoice(actor, action.choiceId, action.value) }
+                null -> println("[driveBots] $char has no action")
             }
         }
     }
@@ -339,9 +340,18 @@ class RoomManager {
     private fun boardState(engine: Engine): BoardState =
         BoardState(
             cars = engine.cars.map { car ->
-                BoardCar(car.index, car.inside.sorted(), car.roof.sorted(), car.lootInside.size, car.lootRoof.size)
+                BoardCar(
+                    car.index,
+                    car.inside.sorted(),
+                    car.roof.sorted(),
+                    car.lootInside.map { it.type.name },
+                    car.lootRoof.map { it.type.name },
+                )
             },
             sheriffCar = engine.sheriffIndex,
+            bandits = engine.players.map { p ->
+                BanditInfo(p.id, p.character, p.ownBullets, p.loot.map { it.type.name })
+            },
         )
 
     private suspend fun sendChoice(room: Room, choice: ChoiceRequired) {
@@ -350,7 +360,7 @@ class RoomManager {
 
     private fun handUpdate(engine: Engine, playerId: String): HandUpdate {
         val p = engine.player(playerId) ?: return HandUpdate(emptyList(), 0, 0)
-        return HandUpdate(p.hand.map { CardInHand(it.uid, cardTypeName(it)) }, p.deck.size, p.ownBullets)
+        return HandUpdate(p.hand.map { CardInHand(it.uid, cardTypeName(it)) }, p.deck.size, p.ownBullets, p.loot.map { it.type.name })
     }
 
     private fun cardTypeName(card: GameCard): String = when (card) {
@@ -384,9 +394,6 @@ class RoomManager {
 
     companion object {
         private val CHARACTERS = listOf("Doc", "Django", "Cheyenne", "Belle", "Tuco", "Ghost")
-
-        /** Сколько ботов сервер автоматически добавляет в новую сессию. */
-        const val BOT_COUNT = 3
 
         /** Пауза перед ходом бота, мс. */
         const val BOT_DELAY_MS = 600L

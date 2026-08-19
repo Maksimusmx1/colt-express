@@ -28,7 +28,7 @@ object StartGame : ClientMessage
 
 @Serializable
 @SerialName("PlayAction")
-data class PlayAction(val cardType: String) : ClientMessage
+data class PlayAction(val cardType: String, val faceDown: Boolean = false) : ClientMessage
 
 @Serializable
 @SerialName("DrawCards")
@@ -104,6 +104,7 @@ data class RoundStart(
     val mode: String,
     val turns: Int,
     val firstPlayerId: String,
+    val modes: List<String> = listOf(mode),
 ) : ServerMessage
 
 @Serializable
@@ -111,6 +112,8 @@ data class RoundStart(
 data class PlanningTurnMsg(
     val playerId: String,
     val mode: String,
+    val faceDownAvailable: Boolean = false,
+    val turnIndex: Int = 0,
 ) : ServerMessage
 
 @Serializable
@@ -127,6 +130,7 @@ data class HandUpdate(
     val hand: List<CardInHand>,
     val deckSize: Int,
     val ownBullets: Int,
+    val loot: List<String> = emptyList(),
 ) : ServerMessage
 
 @Serializable
@@ -134,15 +138,23 @@ data class CardInHand(val uid: String, val type: String)
 
 @Serializable
 @SerialName("BoardState")
-data class BoardState(val cars: List<BoardCar>, val sheriffCar: Int) : ServerMessage
+data class BoardState(val cars: List<BoardCar>, val sheriffCar: Int, val bandits: List<BanditInfo> = emptyList()) : ServerMessage
+
+@Serializable
+data class BanditInfo(
+    val playerId: String,
+    val character: String,
+    val ownBullets: Int,
+    val loot: List<String>,
+)
 
 @Serializable
 data class BoardCar(
     val index: Int,
     val inside: List<String>,
     val roof: List<String>,
-    val lootInside: Int,
-    val lootRoof: Int,
+    val lootInside: List<String>,
+    val lootRoof: List<String>,
 )
 
 @Serializable

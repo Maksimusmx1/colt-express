@@ -25,7 +25,10 @@ import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.plugins.statuspages.StatusPages
 import io.ktor.server.response.respond
 import io.ktor.server.response.respondFile
+import io.ktor.server.response.respondText
+import io.ktor.server.request.receiveText
 import io.ktor.server.routing.get
+import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
 import io.ktor.server.websocket.WebSockets
 import io.ktor.server.websocket.webSocket
@@ -36,7 +39,7 @@ import java.io.File
 const val PORT = 8080
 
 /** Version of the client APK this server distributes via /apk. Keep in sync with the client BUILD_NUMBER. */
-const val SERVER_BUILD_NUMBER = 5
+const val SERVER_BUILD_NUMBER = 72
 
 fun main() {
     embeddedServer(Netty, port = PORT, host = "0.0.0.0", module = Application::module)
@@ -60,8 +63,29 @@ fun Application.module() {
     }
 
     routing {
+        get("/") {
+            val webPath = System.getenv("COLT_WEB_PATH") ?: "/opt/colt/web/index.html"
+            val webFile = File(webPath)
+            if (webFile.exists()) call.respondText(webFile.readText(), contentType = io.ktor.http.ContentType.Text.Html)
+            else call.respondText("<h1>Colt Express</h1><p>Web client not found. Set COLT_WEB_PATH env.</p>", contentType = io.ktor.http.ContentType.Text.Html)
+        }
+
+        get("/train3d/") {
+            val train3dFile = File("/opt/colt/web/train3d/index.html")
+            if (train3dFile.exists()) call.respondText(train3dFile.readText(), contentType = io.ktor.http.ContentType.Text.Html)
+            else call.respond(HttpStatusCode.NotFound)
+        }
+
         get("/health") {
             call.respond(Health("ok", roomManager.playerCount(), roomManager.roomCount(), SERVER_BUILD_NUMBER))
+        }
+
+        post("/log") {
+            val text = call.receiveText()
+            val logDir = File("logs")
+            logDir.mkdirs()
+            File(logDir, "game.log").appendText(text + "\n")
+            call.respond(mapOf("ok" to true))
         }
 
         get("/apk") {
@@ -88,7 +112,7 @@ fun Application.module() {
                         }
                         is ListRooms -> roomManager.listRooms(this)
                         is StartGame -> playerId?.let { roomManager.startGame(it) }
-                        is PlayAction -> playerId?.let { roomManager.playAction(it, message.cardType) }
+                        is PlayAction -> playerId?.let { roomManager.playAction(it, message.cardType, message.faceDown) }
                         is DrawCards -> playerId?.let { roomManager.drawCards(it) }
                         is MakeChoice -> playerId?.let { roomManager.makeChoice(it, message.choiceId, message.value) }
                         is Say -> playerId?.let { roomManager.say(it, message.text) }

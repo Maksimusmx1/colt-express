@@ -1,0 +1,955 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Colt Express</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Merriweather:wght@400;700&display=swap');
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Merriweather',Georgia,serif;background:#F2E9D4;color:#2B1D0F;min-height:100vh;overflow-x:hidden;-webkit-font-smoothing:antialiased}
+.hidden{display:none!important}
+button{cursor:pointer;font-family:inherit}
+input,select{font-family:inherit}
+
+/* Colors */
+:root{--bg:#F2E9D4;--card:#E5D7B6;--ink:#2B1D0F;--muted:#6B5B45;--rust:#8C2F24;--green:#2E7D32;--gold:#B07A00;--blue:#1565C0;--purple:#6A1B9A}
+
+/* ===== LOBBY ===== */
+#lobby{max-width:540px;margin:0 auto;padding:24px 28px}
+.newspaper-header{text-align:center;margin-bottom:24px}
+.newspaper-header .small-top{font-size:10px;color:var(--muted);letter-spacing:1.5px;text-transform:uppercase}
+.newspaper-header h1{font-family:'Playfair Display',Georgia,serif;font-weight:900;font-size:44px;color:var(--ink);line-height:1;margin:6px 0}
+.newspaper-header .subtitle{font-family:'Playfair Display',Georgia,serif;font-weight:700;font-size:13px;letter-spacing:6px;color:var(--rust);text-transform:uppercase}
+.newspaper-header .dateline{display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-top:10px}
+.divider{height:2px;background:var(--ink);margin:6px 0}
+.divider-thin{height:1px;background:var(--ink);margin:3px 0}
+.newspaper-headline{font-family:'Playfair Display',Georgia,serif;font-weight:700;font-size:26px;color:var(--ink);text-align:center;margin:20px 0 10px}
+.newspaper-body{font-size:14px;color:var(--muted);text-align:center;line-height:1.7;margin-bottom:20px}
+.status-box{background:var(--card);border:2px solid var(--ink);border-radius:8px;padding:14px;margin-bottom:18px}
+.status-box .label{font-size:11px;color:var(--muted);margin-bottom:6px;font-weight:600;letter-spacing:.5px}
+.status-ok{color:var(--green);font-size:13px;font-weight:600}
+.status-warn{color:var(--gold);font-size:13px;font-weight:600}
+.status-err{color:var(--rust);font-size:13px;font-weight:600}
+
+.form-group{margin-bottom:14px}
+.form-group label{display:block;font-size:11px;color:var(--muted);margin-bottom:6px;letter-spacing:1px;text-transform:uppercase;font-weight:600}
+.form-group input,.form-group select{width:100%;padding:12px 14px;border:2px solid var(--muted);border-radius:6px;background:var(--card);color:var(--ink);font-size:14px;transition:border-color .15s}
+.form-group input:focus,.form-group select:focus{outline:none;border-color:var(--ink)}
+
+.btn{display:block;width:100%;padding:14px;border:none;border-radius:6px;font-size:14px;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px;transition:all .15s}
+.btn-primary{background:var(--ink);color:var(--bg)}
+.btn-secondary{background:var(--card);color:var(--ink);border:2px solid var(--ink)}
+.btn-primary:hover{background:#1a1008;transform:translateY(-1px)}
+.btn-secondary:hover{background:#d4c9a8;transform:translateY(-1px)}
+
+.room-list{margin:12px 0}
+.room-item{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;background:var(--card);border:1px solid var(--muted);border-radius:6px;margin-bottom:8px;cursor:pointer;transition:border-color .15s}
+.room-item:hover{border-color:var(--ink);background:#ddd0b0}
+.room-info{font-size:13px}
+.room-badge{background:var(--green);color:#fff;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:600}
+.section-title{font-family:'Playfair Display',Georgia,serif;font-weight:700;font-size:15px;color:var(--ink);margin:18px 0 10px;letter-spacing:1px}
+
+/* ===== GAME ===== */
+#game{display:flex;flex-direction:column;height:100vh;height:100dvh;background:var(--bg)}
+
+/* Top bar */
+.top-bar{background:var(--ink);color:var(--bg);padding:8px 12px;display:flex;align-items:center;gap:10px;flex-wrap:nowrap}
+.top-bar .round-label{font-family:'Playfair Display',serif;font-weight:700;font-size:17px;white-space:nowrap}
+.round-chips{display:flex;gap:5px;flex:1;justify-content:center;flex-wrap:nowrap}
+.chip{padding:3px 10px;border:1px solid rgba(242,233,212,.3);border-radius:4px;font-size:12px;background:transparent;color:rgba(242,233,212,.5);white-space:nowrap}
+.chip.active{opacity:1;border-color:var(--bg);background:rgba(242,233,212,.15);font-weight:700;color:var(--bg)}
+.phase-badge{font-weight:700;font-size:12px;padding:3px 10px;border-radius:4px;white-space:nowrap}
+.phase-planning{background:var(--green);color:#fff}
+.phase-robbery{background:var(--rust);color:#fff}
+
+/* Status bar */
+.status-row{display:flex;gap:8px;align-items:flex-start;padding:8px 12px;background:var(--card);border-bottom:1px solid var(--muted);font-size:13px;flex-wrap:wrap;overflow-x:auto}
+.player-card{display:flex;align-items:center;gap:8px;padding:6px 8px;background:var(--bg);border:2px solid var(--gold);border-radius:6px;flex-shrink:0}
+.player-info{display:flex;flex-direction:column;align-items:center;gap:3px}
+.player-name{font-weight:700;font-size:13px}
+.player-loot{display:flex;flex-wrap:wrap;gap:2px;align-content:flex-start;max-width:80px}
+.loot-slot{width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center;filter:drop-shadow(0 1px 2px rgba(0,0,0,.25))}
+.loot-total{font-size:11px;font-weight:700;color:var(--gold);white-space:nowrap}
+.other-bandits{margin-left:auto;display:flex;gap:6px;align-items:flex-start;flex-wrap:wrap}
+.bandit-card{display:flex;align-items:center;gap:6px;padding:6px 6px;background:var(--card);border:1px solid var(--muted);border-radius:6px;flex-shrink:0}
+.bandit-info{display:flex;flex-direction:column;align-items:center;gap:3px}
+.bandit-name{font-size:10px;font-weight:700;max-width:60px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bandit-loot{display:flex;flex-wrap:wrap;gap:2px;align-content:flex-start;max-width:80px}
+
+/* Train */
+.train-area{padding:15px 14px;overflow-x:auto;background:linear-gradient(180deg,var(--bg) 0%,#e8dfc8 100%)}
+.train{display:flex;gap:0;min-height:230px;align-items:flex-end;padding-bottom:6px}
+.car-wrap{position:relative;min-width:140px;flex:1;display:flex;flex-direction:column;align-items:center;padding:0;overflow:visible;margin-left:-22px}
+.car-wrap:first-child{margin-left:0}
+.car-wrap svg{display:block;width:100%;height:auto}
+.car-roof{display:flex;flex-wrap:wrap;gap:4px;justify-content:center;min-height:30px;align-items:center;padding:4px 5px;position:relative;z-index:2;max-width:88px}
+.car-interior{position:absolute;left:10%;right:10%;top:54%;bottom:18%;display:flex;gap:4px;z-index:2;pointer-events:none;justify-content:space-between;align-items:flex-end;align-content:flex-end}
+.car-interior>*{pointer-events:auto}
+.car-interior-loot{display:flex;flex-wrap:wrap;gap:3px;max-width:64px;justify-content:center;align-content:flex-end}
+.car-interior-bandits{display:flex;flex-wrap:wrap;gap:3px;max-width:68px;justify-content:center;align-content:flex-end}
+.car-interior-loc{position:absolute;left:38%;right:22%;top:56%;bottom:18%;display:flex;gap:4px;z-index:2;pointer-events:none;justify-content:center;align-items:flex-end;align-content:flex-end}
+.car-interior-loc>*{pointer-events:auto}
+.car-interior-loc .car-interior-loot{display:flex;flex-wrap:wrap;gap:3px;max-width:60px;justify-content:center;align-content:flex-end}
+.car-interior-loc .car-interior-bandits{display:flex;flex-wrap:wrap;gap:3px;max-width:72px;justify-content:center;align-content:flex-end}
+.car-label{font-size:10px;text-align:center;color:var(--muted);margin-top:4px;letter-spacing:.5px;font-weight:600}
+
+/* Bandit dots */
+.bandit-meeple{display:inline-flex;align-items:center;justify-content:center;filter:drop-shadow(0 1px 3px rgba(0,0,0,.4))}
+.bandit-meeple.me{filter:drop-shadow(0 0 6px var(--gold)) drop-shadow(0 1px 3px rgba(0,0,0,.4))}
+.loot-dot{width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center;filter:drop-shadow(0 1px 2px rgba(0,0,0,.35))}
+.sheriff-meeple{display:inline-flex;align-items:center;justify-content:center;filter:drop-shadow(0 1px 3px rgba(0,0,0,.35))}
+
+/* Turn info */
+.turn-info{padding:10px 14px;font-size:14px;min-height:42px;background:var(--card);border-bottom:1px solid var(--muted);display:flex;align-items:center;gap:8px}
+.turn-info .highlight{font-weight:700;color:var(--ink)}
+.turn-info .turn-icon{width:20px;height:20px;flex-shrink:0}
+.char-Doc{color:#03A9F4}.char-Django{color:#222}.char-Cheyenne{color:#2E7D32}.char-Tuco{color:#C62828}.char-Ghost{color:#546E7A}.char-Belle{color:#7B1FA2}
+
+/* Actions */
+.actions-area{display:flex;gap:8px;padding:8px 14px;flex-wrap:wrap;background:var(--bg);align-items:center}
+.actions-area button{padding:10px 16px;border:2px solid var(--muted);border-radius:6px;background:var(--card);color:var(--ink);font-size:13px;font-weight:600;transition:all .15s}
+.actions-area button:hover{border-color:var(--ink);transform:translateY(-1px);box-shadow:0 2px 4px rgba(0,0,0,.15)}
+.actions-area button.primary{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.actions-area button.primary:hover{background:#1a1008}
+.face-down-toggle{padding:6px 14px;font-size:12px;color:var(--muted)}
+.face-down-toggle label{cursor:pointer;display:flex;align-items:center;gap:6px;font-weight:500}
+
+/* Hand */
+.hand-area{padding:10px 14px;border-top:2px solid var(--ink);background:var(--card)}
+.hand-label{font-size:11px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;font-weight:700}
+.hand-cards{display:flex;gap:8px;flex-wrap:wrap}
+.card-btn{display:flex;align-items:center;gap:6px;padding:10px 14px;border:2px solid var(--muted);border-radius:6px;background:var(--bg);color:var(--ink);font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;min-width:90px;text-align:left}
+.card-btn:hover:not(:disabled){border-color:var(--ink);background:var(--card);transform:translateY(-1px);box-shadow:0 2px 4px rgba(0,0,0,.15)}
+.card-btn:disabled{opacity:.35;cursor:default;filter:grayscale(.3)}
+.card-btn .card-icon{width:20px;height:20px;flex-shrink:0}
+.card-btn.card-MOVE{border-left:4px solid #1565C0}
+.card-btn.card-LADDER{border-left:4px solid #7B1FA2}
+.card-btn.card-SHOOT{border-left:4px solid #C62828}
+.card-btn.card-ROB{border-left:4px solid #B07A00}
+.card-btn.card-PUNCH{border-left:4px solid #E65100}
+.card-btn.card-MARSHAL{border-left:4px solid #FFA000}
+.card-btn.card-BULLET{border-left:4px solid #757575}
+
+/* Bottom panels */
+.bottom-area{display:flex;flex:1;overflow:hidden;border-top:2px solid var(--ink)}
+.left-panel{flex:1;display:flex;flex-direction:column;overflow:hidden;justify-content:flex-end}
+.right-panel{width:280px;background:var(--card);border-left:2px solid var(--ink);display:flex;flex-direction:column;overflow:hidden}
+
+/* Log */
+.panel-title{font-size:10px;font-weight:700;padding:8px 14px;border-bottom:1px solid var(--muted);color:var(--muted);letter-spacing:1px;text-transform:uppercase;background:var(--bg)}
+.log-area{flex:1;overflow-y:auto;padding:8px 14px;font-size:12px;line-height:1.7}
+.log-area div{margin-bottom:2px;border-bottom:1px solid rgba(107,91,69,.08);padding:3px 0}
+.log-area .log-move{color:#1565C0}
+.log-area .log-shoot{color:#C62828;font-weight:600}
+.log-area .log-punch{color:#E65100;font-weight:600}
+.log-area .log-loot{color:#B07A00}
+.log-area .log-sheriff{color:#FFA000;font-weight:600}
+.log-area .log-bullet{color:#757575;font-style:italic}
+.log-area .log-card{color:#6A1B9A}
+.log-area .log-choice{color:var(--ink);font-weight:600}
+.log-area .log-error{color:#C62828;font-weight:700}
+.log-area .log-chat{color:var(--muted);font-style:italic}
+.played-area{border-top:1px solid var(--muted);max-height:200px;overflow-y:auto;padding:8px 14px;font-size:12px;line-height:1.7}
+.played-entry{padding:3px 0;display:flex;align-items:center;gap:8px}
+.played-entry .played-icon{width:18px;height:18px;flex-shrink:0}
+.chat-area{border-top:1px solid var(--muted);padding:8px 12px;background:var(--bg)}
+.chat-input{display:flex;gap:6px}
+.chat-input input{flex:1;padding:8px 10px;border:1px solid var(--muted);border-radius:4px;background:var(--card);color:var(--ink);font-size:12px}
+.chat-input button{padding:8px 14px;border:none;border-radius:4px;background:var(--ink);color:var(--bg);font-size:12px;font-weight:700;transition:background .15s}
+.chat-input button:hover{background:#1a1008}
+
+/* Choice overlay */
+.choice-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(43,29,15,.75);display:flex;align-items:center;justify-content:center;z-index:100;backdrop-filter:blur(2px)}
+.choice-box{background:var(--bg);border:3px solid var(--ink);border-radius:10px;padding:24px;max-width:420px;width:92%;box-shadow:0 12px 40px rgba(0,0,0,.5)}
+.choice-box h3{font-family:'Playfair Display',serif;margin-bottom:16px;font-size:20px;color:var(--ink);text-align:center}
+.choice-box button{display:flex;align-items:center;gap:10px;width:100%;padding:14px 16px;margin-bottom:8px;border:2px solid var(--muted);border-radius:6px;background:var(--card);color:var(--ink);font-size:14px;text-align:left;font-weight:600;transition:all .15s}
+.choice-box button:hover{border-color:var(--ink);background:var(--bg);transform:translateX(4px)}
+.choice-box button .choice-icon{width:22px;height:22px;flex-shrink:0}
+
+/* Debug panel */
+.debug-panel{background:#1a1008;color:#F2E9D4;border-top:2px solid var(--rust);padding:8px 14px;font-size:12px}
+.debug-panel summary{cursor:pointer;font-weight:700;color:var(--rust);font-size:11px;letter-spacing:1px;text-transform:uppercase;user-select:none}
+.debug-controls{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;align-items:center}
+.debug-controls button{padding:6px 12px;border:1px solid var(--rust);border-radius:4px;background:transparent;color:var(--rust);font-size:11px;font-weight:600;transition:all .15s}
+.debug-controls button:hover{background:var(--rust);color:var(--bg)}
+.debug-controls button:disabled{opacity:.3;cursor:default;background:transparent;color:var(--rust)}
+.debug-controls .dbg-sep{width:1px;height:24px;background:rgba(140,47,36,.3)}
+.debug-log{max-height:120px;overflow-y:auto;font-family:monospace;font-size:10px;line-height:1.6;color:#B07A00;background:rgba(0,0,0,.2);padding:4px 8px;border-radius:4px;margin-top:6px;white-space:pre-wrap;word-break:break-all}
+.debug-controls .label{font-size:10px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-right:4px}
+
+/* Game over */
+.gameover{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(43,29,15,.85);display:flex;align-items:center;justify-content:center;z-index:100;backdrop-filter:blur(3px)}
+.gameover-box{background:var(--bg);border:3px solid var(--ink);border-radius:12px;padding:32px;max-width:540px;width:92%;box-shadow:0 12px 40px rgba(0,0,0,.5)}
+.gameover-box h2{font-family:'Playfair Display',serif;text-align:center;margin-bottom:24px;color:var(--rust);font-size:32px}
+.result-row{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid var(--muted);font-size:14px;border-radius:6px;gap:12px}
+.result-row.winner{background:rgba(176,122,0,.12);border:2px solid var(--gold);color:var(--gold);font-weight:700}
+.result-rank{font-family:'Playfair Display',serif;font-size:20px;font-weight:700;width:32px;text-align:center}
+.result-name{flex:1;font-weight:600}
+.result-score{text-align:right;white-space:nowrap}
+.result-detail{font-size:11px;color:var(--muted);font-weight:400}
+</style>
+</head>
+<body>
+
+<div id="lobby">
+  <div class="newspaper-header">
+    <div class="small-top">Ежедневный вестник железных дорог</div>
+    <h1>The Coltshead Tribune</h1>
+    <div class="subtitle">ГАЗЕТА ЗАПАДА</div>
+    <div class="dateline"><span>Суббота, 16 августа 1887 г.</span><span>№ 52</span></div>
+    <div class="divider"></div><div class="divider-thin"></div>
+  </div>
+  <div class="newspaper-headline">БАНДА КОЛЬТА СНОВА ВЫХОДИТ НА БОЛЬШУЮ ДОРОГУ!</div>
+  <div class="newspaper-body">Телеграф доносит: по западным штатам курсирует состав с золотом. Для ограбления требуются отчаянные бандиты.</div>
+  <div id="connect-status" class="status-box"><div class="label">Статус телеграфа</div><div class="status-warn">Устанавливаем связь...</div></div>
+  <div id="connect-form">
+    <div class="form-group"><label>Позывной</label><input id="nickname" placeholder="Ваш ник"></div>
+    <div class="form-group"><label>Адрес сервера</label><input id="server-addr" placeholder="IP:8080"></div>
+    <button class="btn btn-primary" onclick="doConnect()">Подключиться</button>
+  </div>
+  <div id="lobby-form" class="hidden">
+    <button class="btn btn-secondary" onclick="refreshRooms()">Обновить список комнат</button>
+    <div class="room-list" id="room-list"></div>
+    <div class="divider" style="margin:16px 0"></div>
+    <div class="form-group"><label>Макс. игроков</label><select id="max-players"><option>2</option><option>3</option><option selected>4</option><option>5</option><option>6</option></select></div>
+    <button class="btn btn-primary" onclick="createRoom()">Создать комнату</button>
+    <button class="btn btn-secondary" onclick="window.open('/train3d/','_blank')">🚂 Осмотреть 3D-поезд</button>
+  </div>
+  <div id="room-wait" class="hidden">
+    <div class="section-title" id="room-title">Комната</div>
+    <div id="room-players" style="margin-bottom:12px"></div>
+    <button class="btn btn-primary" id="start-btn" onclick="startGame()" style="display:none">Начать игру</button>
+    <button class="btn btn-secondary" onclick="leaveRoom()">Выйти</button>
+  </div>
+</div>
+
+<div id="game" class="hidden">
+  <div class="top-bar">
+    <span class="round-label" id="round-label"></span>
+    <div class="round-chips" id="round-chips"></div>
+    <span class="phase-badge" id="phase-badge"></span>
+    <button id="train3d-btn" onclick="window.open('/train3d/','_blank')" title="Осмотреть 3D-поезд" style="background:transparent;border:1px solid rgba(242,233,212,.3);color:var(--bg);padding:4px 10px;border-radius:4px;font-size:14px;cursor:pointer;margin-left:auto">🚂</button>
+  </div>
+  <div class="status-row">
+    <div class="player-card">
+      <div class="player-info">
+        <span id="char-label" class="player-name"></span>
+        <span id="revolver"></span>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:2px">
+        <div class="player-loot" id="loot-display"></div>
+        <span class="loot-total" id="loot-total"></span>
+      </div>
+    </div>
+    <span class="other-bandits" id="other-bandits"></span>
+  </div>
+  <div class="train-area"><div class="train" id="train"></div></div>
+  <div class="turn-info" id="turn-info"></div>
+  <div class="actions-area" id="actions-area">
+    <div class="face-down-toggle" id="face-down-toggle" style="display:none">
+      <label><input type="checkbox" id="face-down-cb"> Рубашкой вверх (Призрак)</label>
+    </div>
+  </div>
+  <div class="bottom-area">
+    <div class="left-panel">
+      <div class="hand-area hidden" id="hand-area">
+        <div class="hand-label">Ваши карты</div>
+        <div class="hand-cards" id="hand-cards"></div>
+      </div>
+    </div>
+    <div class="right-panel">
+      <div class="panel-title">Лог</div>
+      <div class="log-area" id="log-area"></div>
+      <div class="panel-title">Выложенные карты</div>
+      <div class="played-area" id="played-area"></div>
+      <div class="chat-area">
+        <div class="chat-input">
+          <input id="chat-input" placeholder="Чат..." onkeydown="if(event.key==='Enter')sendChat()">
+          <button onclick="sendChat()">OK</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="debug-panel">
+  <details>
+    <summary>Отладка</summary>
+    <div class="debug-controls" id="debug-controls">
+      <span class="label">Шериф:</span>
+      <button id="dbg-sheriff-fwd" onclick="debugSheriff('F')">→ Вправо</button>
+      <button id="dbg-sheriff-back" onclick="debugSheriff('B')">← Влево</button>
+      <div class="dbg-sep"></div>
+      <span class="label">Бандит:</span>
+      <button id="dbg-bandit-fwd" onclick="debugMove('F')">→ Вперёд</button>
+      <button id="dbg-bandit-back" onclick="debugMove('B')">← Назад</button>
+      <button id="dbg-bandit-ladder" onclick="debugLadder()">Лестница</button>
+      <button id="dbg-bandit-shoot" onclick="debugShoot()">Выстрел</button>
+      <button id="dbg-bandit-rob" onclick="debugRob()">Кража</button>
+      <button id="dbg-bandit-punch" onclick="debugPunch()">Удар</button>
+      <div class="dbg-sep"></div>
+      <button onclick="debugDumpState()">State</button>
+      <button onclick="debugExportLog()">Export Log</button>
+    </div>
+    <div class="debug-log" id="debug-log"></div>
+  </details>
+</div>
+
+<div id="choice-overlay" class="choice-overlay hidden">
+  <div class="choice-box">
+    <h3 id="choice-title">Выберите действие</h3>
+    <div id="choice-options"></div>
+  </div>
+</div>
+
+<div id="gameover-overlay" class="gameover hidden">
+  <div class="gameover-box">
+    <h2>Игра окончена</h2>
+    <div class="divider"></div><div class="divider-thin"></div>
+    <div id="gameover-results" style="margin-top:12px"></div>
+    <button class="btn btn-primary" style="margin-top:16px" onclick="location.reload()">В лобби</button>
+  </div>
+</div>
+
+<script>
+const MODE_NAMES={STANDARD:'Простой ход',TUNNEL:'Туннель',DOUBLE:'Сдвоенный ход',TURN_BACK:'Обратный ход',STATION:'Станция'};
+const CARD_NAMES={MOVE:'Перемещение',LADDER:'Крыша/Вагон',SHOOT:'Выстрел',ROB:'Кража',PUNCH:'Удар',MARSHAL:'Шериф',BULLET:'Пуля'};
+const CHAR_NAMES={Doc:'Док',Django:'Джанго',Cheyenne:'Шайенн',Tuco:'Туко',Ghost:'Призрак',Belle:'Красотка'};
+const CHAR_COLORS={Doc:'#1565C0',Django:'#212121',Cheyenne:'#2E7D32',Tuco:'#C62828',Ghost:'#78909C',Belle:'#7B1FA2'};
+
+let ws,myId,myChar,roomPhase='LOBBY',players=[],characters={},hand=[],ownBullets=6,loot=[],round=null,currentTurn=null,turnIndex=0,currentTurnMode='',choice=null,faceDownAvailable=false,playedCards=[],board=null;
+let debugAutoChoose=null;
+
+function $(id){return document.getElementById(id)}
+function send(msg){if(ws&&ws.readyState===1){const s=JSON.stringify(msg);gameLog('TX '+msg.type+' '+s);ws.send(s)}}
+
+function gameLog(text){
+  const ts=new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
+  const line='['+ts+'] '+text;
+  console.log(line);
+  const dbg=$('debug-log');if(dbg){dbg.textContent+=line+'\n';dbg.scrollTop=dbg.scrollHeight}
+  fetch('/log',{method:'POST',body:line,headers:{'Content-Type':'text/plain'}}).catch(()=>{});
+}
+
+function doConnect(){
+  const nick=$('nickname').value.trim()||'Игрок';
+  let addr=$('server-addr').value.trim();
+  if(!addr)return;
+  addr=addr.replace(/^https?:\/\//,'').replace(/^wss?:\/\//,'').replace(/\/+$/,'');
+  const proto=location.protocol==='https:'?'wss':'ws';
+  const url=`${proto}://${addr}/ws`;
+  $('connect-status').innerHTML='<div class="label">Статус телеграфа</div><div class="status-warn">Связываемся с '+addr+'...</div>';
+  ws=new WebSocket(url);
+  ws.onopen=()=>{$('connect-status').innerHTML='<div class="label">Статус телеграфа</div><div class="status-ok">✓ Банда на связи: сервер отвечает.</div>'}
+  ws.onclose=()=>{$('connect-status').innerHTML='<div class="label">Статус телеграфа</div><div class="status-err">✗ Связь прервана.</div>'}
+  ws.onerror=()=>{$('connect-status').innerHTML='<div class="label">Статус телеграфа</div><div class="status-err">✗ Ошибка телеграфа.</div>'}
+  ws.onmessage=e=>handleMessage(JSON.parse(e.data));
+  localStorage.setItem('ce_nick',nick);
+  localStorage.setItem('ce_addr',addr);
+}
+
+function handleMessage(m){
+  gameLog('RX '+m.type+(m.playerId?' player='+m.playerId:'')+(m.kind?' kind='+m.kind:''));
+  switch(m.type){
+    case'Connected':showLobby();send({type:'ListRooms'});break;
+    case'Welcome':myId=m.playerId;if(m.nickname)$('nickname').value=m.nickname;showLobby();send({type:'ListRooms'});break;
+    case'RoomList':renderRoomList(m.rooms);break;
+    case'RoomUpdate':renderRoom(m);break;
+    case'GameStarted':onGameStarted(m);break;
+    case'RoundStart':onRoundStart(m);break;
+    case'PlanningTurn':onPlanningTurn(m);break;
+    case'CardPlayed':onCardPlayed(m);break;
+    case'HandUpdate':onHandUpdate(m);break;
+    case'BoardState':board=m;gameLog('BoardState cars='+m.cars.length+' sheriffCar='+m.sheriffCar);renderTrain();break;
+    case'ChoiceRequired':
+      choice=m;
+      if(m.playerId===myId){
+        gameLog('ChoiceRequired options='+JSON.stringify(m.options));
+        if(debugAutoChoose){
+          const v=debugAutoChoose;debugAutoChoose=null;
+          gameLog('DEBUG auto-choose: '+v);
+          choose(v);
+        }else{
+          showChoice(m);
+          addLog('Выбор: '+choiceKindName(m.kind),'log-choice');
+        }
+      }else{
+        addLog('Ожидание: '+charName(m.playerId)+' выбирает '+choiceKindName(m.kind),'log-choice');
+      }
+      break;
+    case'GameEventMsg':handleEvent(m.event);break;
+    case'GameEnded':showGameOver(m);break;
+    case'Chat':addLog('[Чат] '+m.nickname+': '+m.text,'log-chat');break;
+    case'SessionReset':location.reload();break;
+    case'Error':gameLog('ERROR: '+m.message);addLog('Ошибка: '+m.message,'log-error');break;
+  }
+}
+
+function onGameStarted(m){
+  players=m.players||[];characters={};players.forEach(p=>characters[p.id]=p.character);
+  myChar=characters[myId]||'';roomPhase='PLANNING';
+  faceDownAvailable=false;
+  $('lobby').classList.add('hidden');$('game').classList.remove('hidden');
+  playedCards=[];updateStatusBar();
+}
+function onRoundStart(m){
+  round=m;playedCards=[];roomPhase='PLANNING';
+  faceDownAvailable=false;
+  $('phase-badge').textContent='Планирование';$('phase-badge').className='phase-badge phase-planning';
+  updateRoundDisplay();
+}
+function onPlanningTurn(m){
+  currentTurn=m.playerId;turnIndex=m.turnIndex||0;currentTurnMode=m.mode||'';
+  roomPhase='PLANNING';
+  faceDownAvailable=m.faceDownAvailable||false;
+  choice=null;
+  $('phase-badge').textContent='Планирование';$('phase-badge').className='phase-badge phase-planning';
+  updateRoundDisplay();updateTurnInfo();updateHand();
+  addLog('Ход: '+charName(currentTurn),'log-choice');
+}
+function onCardPlayed(m){
+  addLog(charName(m.playerId)+' играет '+(m.faceDown?'[рубашка]':cardName(m.cardType)),'log-card');
+  playedCards.push({character:characters[m.playerId]||m.playerId,cardType:m.cardType||'?',faceDown:m.faceDown});
+  renderPlayedCards();
+}
+function onHandUpdate(m){
+  hand=(m.hand||[]).map(c=>({uid:c.uid,type:c.type}));
+  ownBullets=m.ownBullets||6;loot=m.loot||[];
+  renderHand();updateStatusBar();
+}
+
+function handleEvent(ev){
+  if(!ev)return;
+  const t=ev.type;
+  if(t==='CardRevealed')addLog('Вскрытие: '+charName(ev.playerId)+' — '+cardName(ev.cardType),'log-card');
+  else if(t==='BanditMoved')addLog(charName(ev.playerId)+' → вагон '+ev.toCar+(ev.onRoof?' (крыша)':''),'log-move');
+  else if(t==='BanditRoofed')addLog(charName(ev.playerId)+' '+(ev.climbedUp?'на крышу':'с крыши')+' вагона '+ev.car,'log-move');
+  else if(t==='Shot'){
+    addLog(charName(ev.shooterId)+' стреляет в '+charName(ev.targetId),'log-shoot');
+    if(ev.shooterId===myId)ownBullets=Math.max(0,ownBullets-1);
+  }
+  else if(t==='ShotMissed')addLog(charName(ev.shooterId)+' промахивается','log-shoot');
+  else if(t==='Punched')addLog(charName(ev.actorId)+' бьёт '+charName(ev.targetId),'log-punch');
+  else if(t==='LootDropped'){
+    addLog(charName(ev.playerId)+' бросает '+lootName(ev.lootType)+' в вагоне '+ev.car,'log-loot');
+    if(ev.playerId===myId){
+      const idx=loot.indexOf(ev.lootType);
+      if(idx>=0)loot.splice(idx,1);
+    }
+  }
+  else if(t==='LootTaken'){
+    addLog(charName(ev.playerId)+' забирает '+lootName(ev.lootType)+' из вагона '+ev.car,'log-loot');
+    if(ev.playerId===myId)loot.push(ev.lootType);
+  }
+  else if(t==='SheriffMoved')addLog('Шериф → вагон '+ev.to,'log-sheriff');
+  else if(t==='BulletReceived'){
+    if(ev.neutral)addLog(charName(ev.playerId)+' получает пулю от шерифа','log-bullet');
+    else addLog(charName(ev.playerId)+' получает пулю от '+charName(ev.fromId||''),'log-bullet');
+  }
+  else if(t==='DrawAction')addLog(charName(ev.playerId)+' берёт карты','log-card');
+  updateStatusBar();
+  // Sync the 3D scene after any game event (bandits/sheriff moved, loot changed, etc.)
+  if (board) renderTrain();
+}
+
+function charName(id){if(!id)return'?';const ch=characters[id];return CHAR_NAMES[ch]||ch||id}
+function cardName(type){return CARD_NAMES[type]||type}
+function choiceKindName(kind){
+  const map={
+    MOVE_DIRECTION:'направление движения',
+    SHOOT_TARGET:'цель выстрела',
+    ROB_TOKEN:'добычу',
+    MARSHAL_DIRECTION:'направление шерифа',
+    PUNCH_VICTIM:'жертву удара',
+    PUNCH_LOOT:'добычу',
+    PUNCH_TAKE:'забрать упавшую добычу',
+    PUNCH_DIRECTION:'направление',
+    DOUBLE_OPTION:'вариант действия'
+  };
+  return map[kind]||kind;
+}
+function lootName(type){
+  const map={WALLET:'кошелёк',GEM:'самоцвет',CASE:'сейф'};
+  return map[type]||type;
+}
+function lootValue(type){
+  if(type==='CASE')return 1000;
+  if(type==='GEM')return 500;
+  return 250;
+}
+
+function showLobby(){
+  $('connect-form').classList.add('hidden');
+  $('lobby-form').classList.remove('hidden');
+  $('room-wait').classList.add('hidden');
+}
+function refreshRooms(){send({type:'ListRooms'})}
+function renderRoomList(rooms){
+  const el=$('room-list');
+  if(!rooms||!rooms.length){el.innerHTML='<div style="opacity:.5;font-size:13px;padding:8px">Нет доступных комнат</div>';return}
+  el.innerHTML=rooms.map(r=>`<div class="room-item" onclick="joinRoom('${r.roomId}')"><div class="room-info"><strong>${r.ownerNickname}</strong> — ${r.players}/${r.maxPlayers} игроков</div><span class="room-badge">${r.phase}</span></div>`).join('');
+}
+function joinRoom(id){send({type:'JoinRoom',roomId:id,nickname:$('nickname').value.trim()||'Игрок'})}
+function createRoom(){send({type:'CreateRoom',nickname:$('nickname').value.trim()||'Игрок',maxPlayers:parseInt($('max-players').value)})}
+function startGame(){send({type:'StartGame'})}
+function leaveRoom(){location.reload()}
+
+function renderRoom(r){
+  $('lobby-form').classList.add('hidden');$('room-wait').classList.remove('hidden');
+  $('room-title').textContent='Комната '+r.roomId;
+  const isOwner=r.ownerId===myId;
+  $('start-btn').style.display=isOwner?'block':'none';
+  $('start-btn').disabled=!(isOwner&&r.players.length>=2);
+  $('room-players').innerHTML=r.players.map(p=>{
+    const ch=characters[p.id]||'';const cls=ch?'char-'+ch:'';
+    const icon=ch?`<span style="display:inline-block;vertical-align:middle;margin-right:4px">${meepleSvg(ch,false,16)}</span>`:'';
+    return `<div class="${cls}" style="padding:6px 0;font-size:13px;border-bottom:1px solid rgba(107,91,69,.1)">${icon}${p.nickname}${ch?' ('+CHAR_NAMES[ch]+')':''}${p.id===r.ownerId?' ★':''}</div>`;
+  }).join('');
+}
+
+function updateRoundDisplay(){
+  if(!round)return;
+  $('round-label').textContent=`Раунд ${round.round}/5`;
+  const modes=round.modes||[round.mode];
+  $('round-chips').innerHTML=modes.map((m,i)=>{
+    const cls=i===turnIndex&&roomPhase==='PLANNING'?'chip active':'chip';
+    return `<span class="${cls}">${MODE_NAMES[m]||m}</span>`;
+  }).join('');
+}
+function updateTurnInfo(){
+  const el=$('turn-info');
+  if(!currentTurn){el.innerHTML='<span style="opacity:.5">Ожидание...</span>';return}
+  const isMe=currentTurn===myId;const ch=characters[currentTurn]||'';const nm=CHAR_NAMES[ch]||ch;const cls='char-'+(ch||'unknown');
+  if(roomPhase==='ROBBERY'){el.innerHTML='<span class="turn-icon"><svg width="20" height="20" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="var(--rust)" opacity=".15"/><path d="M12 6v6l4 2" fill="none" stroke="var(--rust)" stroke-width="2.5" stroke-linecap="round"/></svg></span><span style="color:var(--rust);font-weight:700">Ограбление</span>';return}
+  if(isMe){el.innerHTML='<span class="turn-icon"><svg width="20" height="20" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="var(--green)" opacity=".15"/><path d="M8 12l3 3 5-5" fill="none" stroke="var(--green)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="'+cls+' highlight">Ваш ход!</span> Нажмите карту или возьмите 3';return}
+  el.innerHTML='<span class="turn-icon"><svg width="20" height="20" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="var(--muted)" opacity=".15"/><circle cx="12" cy="12" r="3" fill="var(--muted)"/></svg></span>Ожидание: <span class="'+cls+'">'+nm+'</span>...';
+}
+function updateStatusBar(){
+  const ch=myChar||'';$('char-label').textContent=CHAR_NAMES[ch]||ch;$('char-label').className='player-name char-'+(ch||'unknown');
+  $('revolver').innerHTML=revolverDrumSvg(ownBullets,6,36);
+  // Player loot - 2 rows of 4 cells
+  let myLoot='';let myTotal=0;
+  const totalSlots=8;
+  for(let i=0;i<totalSlots;i++){
+    if(i<loot.length){myLoot+=`<span class="loot-slot" title="${lootName(loot[i])}">${lootSvg(loot[i],18)}</span>`;myTotal+=lootValue(loot[i])}
+    else myLoot+=`<span class="loot-slot"></span>`;
+  }
+  $('loot-display').innerHTML=myLoot;
+  $('loot-total').textContent=myTotal>0?myTotal+'$':'';
+  if(board&&board.bandits){
+    const others=board.bandits.filter(b=>b.playerId!==myId);
+    $('other-bandits').innerHTML=others.map(b=>{
+      const lootArr=b.loot||[];
+      let lootHtml='';let total=0;
+      const totalSlots=8;
+      for(let j=0;j<totalSlots;j++){
+        if(j<lootArr.length){lootHtml+=`<span class="loot-slot" title="${lootName(lootArr[j])}">${lootSvg(lootArr[j],18)}</span>`;total+=lootValue(lootArr[j])}
+        else lootHtml+=`<span class="loot-slot"></span>`;
+      }
+      return`<div class="bandit-card">
+        <div class="bandit-info">
+          ${meepleSvg(b.character,false,16)}
+          <span class="bandit-name char-${b.character||'unknown'}">${CHAR_NAMES[b.character]||'?'}</span>
+          ${revolverDrumSvg(b.ownBullets,6,36)}
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:2px">
+          <div class="bandit-loot">${lootHtml}</div>
+          ${total>0?`<span class="loot-total">${total}$</span>`:''}
+        </div>
+      </div>`;
+    }).join('');
+  }
+}
+
+// SVG icons
+function cardIconSvg(type){
+  const s=20;
+  if(type==='MOVE')return`<svg width="${s}" height="${s}" viewBox="0 0 24 24"><path d="M4 12h16M12 4l8 8-8 8" fill="none" stroke="#1565C0" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  if(type==='LADDER')return`<svg width="${s}" height="${s}" viewBox="0 0 24 24"><path d="M8 4v16M16 4v16M6 8h12M6 12h12M6 16h12" fill="none" stroke="#7B1FA2" stroke-width="2" stroke-linecap="round"/></svg>`;
+  if(type==='SHOOT')return`<svg width="${s}" height="${s}" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" fill="#C62828"/><circle cx="12" cy="12" r="8" fill="none" stroke="#C62828" stroke-width="2"/><line x1="12" y1="2" x2="12" y2="6" stroke="#C62828" stroke-width="2"/><line x1="12" y1="18" x2="12" y2="22" stroke="#C62828" stroke-width="2"/><line x1="2" y1="12" x2="6" y2="12" stroke="#C62828" stroke-width="2"/><line x1="18" y1="12" x2="22" y2="12" stroke="#C62828" stroke-width="2"/></svg>`;
+  if(type==='ROB')return`<svg width="${s}" height="${s}" viewBox="0 0 24 24"><rect x="4" y="8" width="16" height="12" rx="2" fill="#B07A00" stroke="#8D6E63" stroke-width="1.5"/><path d="M8 8V6a4 4 0 018 0v2" fill="none" stroke="#8D6E63" stroke-width="2"/><circle cx="12" cy="14" r="1.5" fill="#FFD54F"/></svg>`;
+  if(type==='PUNCH')return`<svg width="${s}" height="${s}" viewBox="0 0 24 24"><path d="M7 14l-3 3M17 7l3-3M7 14c2-2 4-1 5 0s3 2 5 0M7 14l3-3c1.5-1.5 3-1 4 0l3 3" fill="none" stroke="#E65100" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  if(type==='MARSHAL')return`<svg width="${s}" height="${s}" viewBox="0 0 24 24"><polygon points="12,2 15,9 22,9 16,14 18,21 12,17 6,21 8,14 2,9 9,9" fill="#FFA000" stroke="#E65100" stroke-width="1.5"/></svg>`;
+  if(type==='BULLET')return`<svg width="${s}" height="${s}" viewBox="0 0 24 24"><ellipse cx="12" cy="8" rx="4" ry="5" fill="#9E9E9E" stroke="#616161" stroke-width="1.5"/><rect x="8" y="10" width="8" height="10" rx="1" fill="#BDBDBD" stroke="#616161" stroke-width="1.5"/></svg>`;
+  return`<svg width="${s}" height="${s}" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2" fill="var(--card)" stroke="var(--muted)" stroke-width="1.5"/></svg>`;
+}
+function lootSvg(type,s){
+  s=s||20;
+  if(type==='WALLET'){
+    const sc=Math.round(s*22/20);
+    return`<svg width="${sc}" height="${s}" viewBox="0 0 22 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M5,9 C5,8 7,7 8,7 L14,7 C15,7 17,8 17,9 C17.5,12 17,16 15,18 C13.5,19.5 8.5,19.5 7,18 C5,16 4.5,12 5,9 Z" fill="#D9A05B" stroke="#5C4526" stroke-width="1.2"/>
+      <path d="M7,7 L15,7 L15,9 L7,9 Z" fill="#C9A25A" stroke="#5C4526" stroke-width="0.8"/>
+      <path d="M9,7 C9,5.5 10,4.5 11,4 C12,4.5 13,5.5 13,7" fill="#D9A05B" stroke="#5C4526" stroke-width="1"/>
+      <path d="M7,8 L15,8" stroke="#8B5A2B" stroke-width="1.2"/>
+      <path d="M9,8 C8,6.5 7,6.5 6.5,7" stroke="#8B5A2B" stroke-width="1"/>
+      <path d="M13,8 C14,6.5 15,6.5 15.5,7" stroke="#8B5A2B" stroke-width="1"/>
+      <path d="M11,11 L11,11 M10,12 C10,11.5 10.5,11 11,11 C11.5,11 12,11.5 12,12 C12,12.5 11.5,13 11,13 C10.5,13 10,13.5 10,14 C10,14.5 10.5,15 11,15 C11.5,15 12,14.5 12,14" stroke="#8B5A2B" stroke-width="0.8" fill="none"/>
+    </svg>`;
+  }
+  if(type==='GEM'){
+    return`<svg width="${s}" height="${s}" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M10,1 L19,8 L10,19 L1,8 Z" fill="#C62828" stroke="#4A0000" stroke-width="0.8"/>
+      <path d="M10,1 L1,8 L10,8 Z" fill="#EF5350"/>
+      <path d="M10,1 L19,8 L10,8 Z" fill="#E53935"/>
+      <path d="M1,8 L10,8 L10,19 Z" fill="#B71C1C"/>
+      <path d="M19,8 L10,8 L10,19 Z" fill="#8E0000"/>
+      <path d="M7,4 L10,1 L13,4 L10,5.5 Z" fill="#FF8A80" fill-opacity="0.5"/>
+    </svg>`;
+  }
+  if(type==='CASE'){
+    const sh=Math.round(s*86/60);
+    return`<svg width="${s}" height="${sh}" viewBox="0 0 60 86" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M12,26 h36 a4,4 0 0 1 4,4 v46 a4,4 0 0 1 -4,4 h-36 a4,4 0 0 1 -4,-4 v-46 a4,4 0 0 1 4,-4 z" fill="#8B5A2B" stroke="#4A3520" stroke-width="2"/>
+      <path d="M17,34 h26 a2,2 0 0 1 2,2 v36 a2,2 0 0 1 -2,2 h-26 a2,2 0 0 1 -2,-2 v-36 a2,2 0 0 1 2,-2 z" fill="#9C6A33" stroke="#4A3520" stroke-width="1"/>
+      <line x1="24" y1="26" x2="24" y2="80" stroke="#4A3520" stroke-width="2"/>
+      <line x1="36" y1="26" x2="36" y2="80" stroke="#4A3520" stroke-width="2"/>
+      <rect x="26" y="28" width="8" height="6" fill="#DEB86E" stroke="#4A3520" stroke-width="1"/>
+      <path d="M25,26 v-5 a5,5 0 0 1 10,0 v5" fill="none" stroke="#4A3520" stroke-width="2"/>
+    </svg>`;
+  }
+  return`<svg width="${s}" height="${s}" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" fill="#9E9E9E"/></svg>`;
+}
+function lootDotSvg(type){
+  if(type==='WALLET'){
+    return`<svg width="14" height="13" viewBox="0 0 22 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M5,9 C5,8 7,7 8,7 L14,7 C15,7 17,8 17,9 C17.5,12 17,16 15,18 C13.5,19.5 8.5,19.5 7,18 C5,16 4.5,12 5,9 Z" fill="#D9A05B" stroke="#5C4526" stroke-width="1.4"/>
+      <path d="M7,8 L15,8" stroke="#8B5A2B" stroke-width="1.4"/>
+      <path d="M11,11 L11,11 M10,12 C10,11.5 10.5,11 11,11 C11.5,11 12,11.5 12,12 C12,12.5 11.5,13 11,13 C10.5,13 10,13.5 10,14 C10,14.5 10.5,15 11,15 C11.5,15 12,14.5 12,14" stroke="#8B5A2B" stroke-width="0.9" fill="none"/>
+    </svg>`;
+  }
+  if(type==='GEM'){
+    return`<svg width="14" height="14" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M10,1 L19,8 L10,19 L1,8 Z" fill="#C62828" stroke="#4A0000" stroke-width="0.8"/>
+      <path d="M10,1 L1,8 L10,8 Z" fill="#EF5350"/>
+      <path d="M10,1 L19,8 L10,8 Z" fill="#E53935"/>
+      <path d="M1,8 L10,8 L10,19 Z" fill="#B71C1C"/>
+      <path d="M19,8 L10,8 L10,19 Z" fill="#8E0000"/>
+      <path d="M7,4 L10,1 L13,4 L10,5.5 Z" fill="#FF8A80" fill-opacity="0.5"/>
+    </svg>`;
+  }
+  if(type==='CASE'){
+    return`<svg width="13" height="18" viewBox="0 0 60 86" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M12,26 h36 a4,4 0 0 1 4,4 v46 a4,4 0 0 1 -4,4 h-36 a4,4 0 0 1 -4,-4 v-46 a4,4 0 0 1 4,-4 z" fill="#8B5A2B" stroke="#4A3520" stroke-width="2.5"/>
+      <line x1="24" y1="26" x2="24" y2="80" stroke="#4A3520" stroke-width="2.5"/>
+      <line x1="36" y1="26" x2="36" y2="80" stroke="#4A3520" stroke-width="2.5"/>
+      <rect x="26" y="28" width="8" height="6" fill="#DEB86E" stroke="#4A3520" stroke-width="1"/>
+      <path d="M25,26 v-5 a5,5 0 0 1 10,0 v5" fill="none" stroke="#4A3520" stroke-width="2.5"/>
+    </svg>`;
+  }
+  return`<svg width="14" height="14" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" fill="#9E9E9E"/></svg>`;
+}
+
+function meepleSvg(character,isMe,s){
+  s=s||22;
+  const color=CHAR_COLORS[character]||'#9E9E9E';
+  const ink='#2B1D0F';
+  const w=Math.round(s*20/28);
+  return`<svg class="bandit-meeple${isMe?' me':''}" width="${w}" height="${s}" viewBox="0 0 20 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <ellipse cx="10" cy="26.5" rx="6" ry="1.5" fill="${ink}" opacity=".18"/>
+    <ellipse cx="10" cy="8" rx="4.2" ry="4.5" fill="${color}" stroke="${ink}" stroke-width="1.1"/>
+    <path d="M5.5 13 L3.5 15 L6.5 20 L4 27 L16 27 L13.5 20 L16.5 15 L14.5 13 Z" fill="${color}" stroke="${ink}" stroke-width="1.1"/>
+    ${isMe?`<line x1="3.5" y1="28" x2="16.5" y2="28" stroke="#8C2F24" stroke-width="2.2"/>`:''}
+  </svg>`;
+}
+
+function sheriffMeepleSvg(s){
+  s=s||22;
+  const w=Math.round(s*20/28);
+  const ink='#2B1D0F';
+  const color='#FBC02D';
+  return`<svg class="sheriff-meeple" width="${w}" height="${s}" viewBox="0 0 20 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <ellipse cx="10" cy="26.5" rx="6" ry="1.5" fill="${ink}" opacity=".18"/>
+    <ellipse cx="10" cy="8" rx="4.2" ry="4.5" fill="${color}" stroke="${ink}" stroke-width="1.1"/>
+    <path d="M5.5 13 L3.5 15 L6.5 20 L4 27 L16 27 L13.5 20 L16.5 15 L14.5 13 Z" fill="${color}" stroke="${ink}" stroke-width="1.1"/>
+    <polygon points="10,17 11,19 13,19 11.5,20.5 12,22.5 10,21.5 8,22.5 8.5,20.5 7,19 9,19" fill="#FFD700" stroke="#8B6914" stroke-width=".4"/>
+  </svg>`;
+}
+
+function revolverDrumSvg(loaded,total,s){
+  s=s||32;
+  const r=s/2-2;
+  const cx=s/2;const cy=s/2;
+  const fired=total-loaded;
+  let chambers='';
+  for(let i=0;i<total;i++){
+    const angle=(i*360/total-90)*Math.PI/180;
+    const dx=cx+Math.cos(angle)*(r*.6);
+    const dy=cy+Math.sin(angle)*(r*.6);
+    const isEmpty=i<fired;
+    const fill=isEmpty?'var(--bg)':'#FFD54F';
+    const stroke=isEmpty?'var(--muted)':'#F9A825';
+    chambers+=`<circle cx="${dx}" cy="${dy}" r="${s*.1}" fill="${fill}" stroke="${stroke}" stroke-width="1"/>`;
+  }
+  return`<svg width="${s}" height="${s}" viewBox="0 0 ${s} ${s}" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="${cx}" cy="${cy}" r="${r}" fill="var(--card)" stroke="var(--ink)" stroke-width="2"/>
+    <circle cx="${cx}" cy="${cy}" r="${r*.35}" fill="var(--bg)" stroke="var(--ink)" stroke-width="1.5"/>
+    ${chambers}
+  </svg>`;
+}
+
+function locomotiveSvg(){
+  const ink='#2B1D0F';
+  const wood='#E5D7B6';
+  const deep='#C9B585';
+  const muted='#6B5B45';
+  const rust='#8C2F24';
+  return `<svg viewBox="0 0 180 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M4,130 L10,108 L34,130 Z" fill="${wood}" stroke="${ink}" stroke-width="1.2"/>
+    <rect x="12" y="78" width="40" height="44" rx="6" fill="${wood}" stroke="${ink}" stroke-width="1.2"/>
+    <line x1="28" y1="82" x2="28" y2="116" stroke="${muted}" stroke-width="1.5"/>
+    <line x1="42" y1="82" x2="42" y2="116" stroke="${muted}" stroke-width="1.5"/>
+    <rect x="18" y="58" width="8" height="20" fill="${wood}" stroke="${ink}" stroke-width="1.2"/>
+    <rect x="15" y="52" width="14" height="6" fill="${rust}"/>
+    <circle cx="18" cy="102" r="6" fill="${rust}" stroke="${ink}" stroke-width="1.2"/>
+    <rect x="56" y="80" width="120" height="42" fill="${wood}" stroke="${ink}" stroke-width="1.2"/>
+    <rect x="60" y="84" width="112" height="38" fill="${deep}"/>
+    <rect x="54" y="74" width="68" height="6" fill="${wood}" stroke="${ink}" stroke-width="1.2"/>
+    <rect x="6" y="122" width="162" height="4" fill="${wood}" stroke="${ink}" stroke-width="1.2"/>
+    <rect x="8" y="126" width="158" height="6" fill="${muted}"/>
+    <circle cx="34" cy="140" r="10" fill="${wood}" stroke="${ink}" stroke-width="1.6"/>
+    <circle cx="34" cy="140" r="3" fill="${ink}"/>
+    <line x1="28" y1="140" x2="40" y2="140" stroke="${muted}" stroke-width="1.2"/>
+    <circle cx="110" cy="140" r="10" fill="${wood}" stroke="${ink}" stroke-width="1.6"/>
+    <circle cx="110" cy="140" r="3" fill="${ink}"/>
+    <line x1="104" y1="140" x2="116" y2="140" stroke="${muted}" stroke-width="1.2"/>
+    <circle cx="158" cy="140" r="10" fill="${wood}" stroke="${ink}" stroke-width="1.6"/>
+    <circle cx="158" cy="140" r="3" fill="${ink}"/>
+    <line x1="152" y1="140" x2="164" y2="140" stroke="${muted}" stroke-width="1.2"/>
+    <rect x="170" y="130" width="6" height="10" rx="2" fill="${ink}"/>
+  </svg>`;
+}
+function carSvg(isLast){
+  const ink='#2B1D0F';
+  const wood='#E5D7B6';
+  const deep='#C9B585';
+  const muted='#6B5B45';
+  const conn=isLast
+    ?`<rect x="0" y="130" width="6" height="10" rx="2" fill="${ink}"/>`
+    :`<rect x="0" y="130" width="6" height="10" rx="2" fill="${ink}"/><rect x="144" y="130" width="6" height="10" rx="2" fill="${ink}"/>`;
+  return `<svg viewBox="0 0 150 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="4" y="80" width="142" height="6" fill="${wood}" stroke="${ink}" stroke-width="1.2"/>
+    <rect x="10" y="86" width="130" height="36" rx="4" fill="${deep}" stroke="${ink}" stroke-width="1.2"/>
+    <rect x="6" y="122" width="138" height="4" fill="${wood}" stroke="${ink}" stroke-width="1.2"/>
+    <rect x="8" y="126" width="134" height="6" fill="${muted}"/>
+    <circle cx="45" cy="140" r="10" fill="${wood}" stroke="${ink}" stroke-width="1.6"/>
+    <circle cx="45" cy="140" r="3" fill="${ink}"/>
+    <line x1="39" y1="140" x2="51" y2="140" stroke="${muted}" stroke-width="1.2"/>
+    <circle cx="105" cy="140" r="10" fill="${wood}" stroke="${ink}" stroke-width="1.6"/>
+    <circle cx="105" cy="140" r="3" fill="${ink}"/>
+    <line x1="99" y1="140" x2="111" y2="140" stroke="${muted}" stroke-width="1.2"/>
+    ${conn}
+  </svg>`;
+}
+
+function renderTrain(){
+  if(!board||!board.cars){console.warn('[web] renderTrain: no board.cars');return;}
+  const trainEl=$('train');
+  if(!trainEl.querySelector('iframe')){
+    trainEl.innerHTML=`<iframe id="train3d-frame" src="/train3d/" style="display:block;width:100%;height:300px;border:0;border-radius:6px;background:#0a0a0a"></iframe>`;
+    const newFrame = document.getElementById('train3d-frame');
+    // Re-render once the iframe finishes loading (so contentWindow is ready).
+    if (newFrame) newFrame.addEventListener('load', () => renderTrain());
+  }
+  const frame=$('train3d-frame');
+  if(!frame||!frame.contentWindow)return;
+  const players=(players||[]).map(p=>({id:p.id,nickname:p.nickname,character:p.character}));
+  const payload={
+    cars: board.cars.map((c,i)=>({index:i,inside:c.inside||[],roof:c.roof||[],lootInside:c.lootInside||[],lootRoof:c.lootRoof||[]})),
+    sheriffCar: board.sheriffCar,
+    sheriffOnRoof: !!board.sheriffOnRoof,
+    players,
+    currentTurn: currentTurn,
+    currentTurnMode: currentTurnMode,
+    turnIndex: turnIndex,
+  };
+  frame.contentWindow.postMessage({type:'setState',payload},'*');
+  console.log('[3D] sent state:', payload);
+}
+
+function renderHand(){
+  const el=$('hand-cards');const area=$('hand-area');
+  if(!hand.length){area.classList.add('hidden');renderDrawBtn();return}
+  area.classList.remove('hidden');
+  const isMyTurn=currentTurn===myId&&roomPhase==='PLANNING';
+  el.innerHTML=hand.map(c=>`<button class="card-btn card-${c.type}" onclick="playCard('${c.type}')" ${!isMyTurn?'disabled':''}><span class="card-icon">${cardIconSvg(c.type)}</span>${CARD_NAMES[c.type]||c.type}</button>`).join('');
+  $('face-down-toggle').style.display=(faceDownAvailable&&isMyTurn)?'block':'none';
+  renderDrawBtn();
+}
+function renderDrawBtn(){
+  const el=$('actions-area');
+  const existing=el.querySelector('.draw-btn');
+  const isMyTurn=currentTurn===myId&&roomPhase==='PLANNING';
+  if(isMyTurn&&currentTurnMode!=='DOUBLE'){
+    el.style.display='';
+    if(!existing){const b=document.createElement('button');b.className='primary draw-btn';b.textContent='Взять 3 карты';b.onclick=()=>drawCards();el.appendChild(b)}
+  }else{if(existing)existing.remove();if(!isMyTurn)el.style.display='none'}
+}
+
+function playCard(type){gameLog('playCard('+type+') myTurn='+(currentTurn===myId)+' phase='+roomPhase);if(currentTurn===myId&&roomPhase==='PLANNING')send({type:'PlayAction',cardType:type,faceDown:$('face-down-cb')?.checked||false})}
+function drawCards(){gameLog('drawCards() myTurn='+(currentTurn===myId)+' phase='+roomPhase);if(currentTurn===myId&&roomPhase==='PLANNING')send({type:'DrawCards'})}
+
+function showChoice(c){
+  $('choice-overlay').classList.remove('hidden');
+  const kn={MOVE_DIRECTION:'Куда двигаться',SHOOT_TARGET:'Цель выстрела',ROB_TOKEN:'Какую добычу',MARSHAL_DIRECTION:'Куда шерифу',PUNCH_VICTIM:'Кого ударить',PUNCH_DIRECTION:'Куда отбросить',DOUBLE_OPTION:'Сдвоенный ход',PUNCH_TAKE:'Забрать кошелёк?'};
+  $('choice-title').textContent=kn[c.kind]||c.kind;
+  $('choice-options').innerHTML=c.options.map(opt=>{
+    const label=choiceLabel(opt,c.kind);
+    let icon='';
+    if(c.kind==='ROB_TOKEN'){
+      const lt=opt;icon=lootSvg(lt,22);
+    }else if(c.kind==='DOUBLE_OPTION'){
+      if(opt==='PLAY2')icon=cardIconSvg('MOVE');
+      else if(opt==='DRAW6')icon=cardIconSvg('BULLET');
+      else icon=cardIconSvg('LADDER');
+    }else if(c.kind==='SHOOT_TARGET'||c.kind==='PUNCH_VICTIM'){
+      const ch=characters[opt]||'';
+      icon=meepleSvg(ch,false,22);
+    }else if(c.kind==='MOVE_DIRECTION'){
+      icon=`<svg width="22" height="22" viewBox="0 0 24 24"><path d="${opt[0]==='F'?'M4 12h16M12 4l8 8-8 8':'M20 12H4M12 4l-8 8 8 8'}" fill="none" stroke="var(--ink)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+    }else if(c.kind==='MARSHAL_DIRECTION'||c.kind==='PUNCH_DIRECTION'){
+      icon=`<svg width="22" height="22" viewBox="0 0 24 24"><path d="${opt==='F'?'M4 12h16M12 4l8 8-8 8':'M20 12H4M12 4l-8 8 8 8'}" fill="none" stroke="var(--ink)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+    }else if(c.kind==='PUNCH_TAKE'){
+      icon=opt==='TAKE'?lootSvg('WALLET',22):`<svg width="22" height="22" viewBox="0 0 24 24"><line x1="6" y1="6" x2="18" y2="18" stroke="var(--muted)" stroke-width="2.5" stroke-linecap="round"/><line x1="18" y1="6" x2="6" y2="18" stroke="var(--muted)" stroke-width="2.5" stroke-linecap="round"/></svg>`;
+    }
+    return`<button onclick="choose('${opt}')"><span class="choice-icon">${icon}</span>${label}</button>`;
+  }).join('');
+}
+function choiceLabel(opt,kind){
+  if(kind==='MOVE_DIRECTION'){if(opt[0]==='F')return'Вправо '+opt.substring(1);if(opt[0]==='B')return'Влево '+opt.substring(1)}
+  if(kind==='DOUBLE_OPTION')return{PLAY2:'Сыграть 2 карты',DRAW6:'Взять 6 карт',DRAW3_PLAY1:'Взять 3, сыграть 1'}[opt]||opt;
+  if(kind==='MARSHAL_DIRECTION'||kind==='PUNCH_DIRECTION')return opt==='F'?'Вправо':'Влево';
+  if(kind==='PUNCH_TAKE')return opt==='TAKE'?'Забрать':'Оставить на месте';
+  if(opt==='B')return'Влево';
+  if(opt==='F')return'Вправо';
+  if(opt==='TAKE')return'Забрать';
+  if(opt==='LEAVE')return'Оставить на месте';
+  return charName(opt)||opt;
+}
+function choose(value){gameLog('choose('+value+')');if(!choice)return;send({type:'MakeChoice',choiceId:choice.choiceId,value});choice=null;$('choice-overlay').classList.add('hidden')}
+
+function renderPlayedCards(){
+  const el=$('played-area');
+  if(!playedCards.length){el.innerHTML='<div style="opacity:.4;font-size:12px">нет карт</div>';return}
+  el.innerHTML=playedCards.map(e=>{
+    const cn=CHAR_NAMES[e.character]||e.character;const cls='char-'+(e.character||'unknown');
+    const card=e.faceDown?'[рубашка]':(CARD_NAMES[e.cardType]||e.cardType);
+    const icon=e.faceDown?'<svg class="played-icon" width="16" height="16" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3" fill="var(--muted)" stroke="var(--ink)" stroke-width="1.5"/><text x="12" y="16" text-anchor="middle" fill="var(--bg)" font-size="12" font-weight="700">?</text></svg>':`<span class="played-icon">${cardIconSvg(e.cardType)}</span>`;
+    return`<div class="played-entry">${icon}<span class="${cls}">${cn}</span>: ${card}</div>`;
+  }).join('');
+  el.scrollTop=el.scrollHeight;
+}
+function addLog(text,cls){
+  const el=$('log-area');const div=document.createElement('div');div.textContent=text;if(cls)div.className=cls;el.appendChild(div);
+  if(el.children.length>100)el.removeChild(el.firstChild);
+  el.scrollTop=el.scrollHeight;
+}
+function showGameOver(m){
+  $('gameover-overlay').classList.remove('hidden');
+  const sorted=[...m.results].sort((a,b)=>b.total-a.total);
+  let rank=0;let prevTotal=-1;
+  $('gameover-results').innerHTML=sorted.map(r=>{
+    if(r.total!==prevTotal){rank++;prevTotal=r.total}
+    const isW=r.playerId===m.winnerId;const ch=characters[r.playerId]||'';const nm=CHAR_NAMES[ch]||ch;
+    const medal=rank===1?'🥇':rank===2?'🥈':rank===3?'🥉':`#${rank}`;
+    return`<div class="result-row${isW?' winner':''}">
+      <span class="result-rank">${medal}</span>
+      <span class="result-name char-${ch||'unknown'}">${nm}</span>
+      <span class="result-score">${r.total}$<br><span class="result-detail">добыча ${r.lootSum}$${r.accuracyPrize?' + 1000$':''}</span></span>
+    </div>`;
+  }).join('');
+}
+function sendChat(){const input=$('chat-input');const t=input.value.trim();if(!t)return;send({type:'Say',text:t});input.value=''}
+
+// ===== DEBUG CONTROLS =====
+function debugSheriff(dir){
+  gameLog('DEBUG debugSheriff('+dir+') phase='+roomPhase+' myTurn='+(currentTurn===myId));
+  if(roomPhase==='PLANNING'&&currentTurn===myId){
+    send({type:'PlayAction',cardType:'MARSHAL'});
+    debugAutoChoose=dir;
+  }else if(roomPhase==='ROBBERY'&&choice&&choice.playerId===myId&&choice.kind==='MARSHAL_DIRECTION'){
+    choose(dir);
+  }else{
+    gameLog('DEBUG Cannot move sheriff now');
+  }
+}
+function debugMove(dir){
+  gameLog('DEBUG debugMove('+dir+') phase='+roomPhase+' myTurn='+(currentTurn===myId));
+  if(roomPhase==='PLANNING'&&currentTurn===myId){
+    send({type:'PlayAction',cardType:'MOVE'});
+    debugAutoChoose=dir;
+  }else if(roomPhase==='ROBBERY'&&choice&&choice.playerId===myId&&choice.kind==='MOVE_DIRECTION'){
+    choose(dir);
+  }else{
+    gameLog('DEBUG Cannot move now');
+  }
+}
+function debugLadder(){
+  gameLog('DEBUG debugLadder() phase='+roomPhase+' myTurn='+(currentTurn===myId));
+  if(roomPhase==='PLANNING'&&currentTurn===myId){
+    send({type:'PlayAction',cardType:'LADDER'});
+  }else{
+    gameLog('DEBUG Cannot use ladder now');
+  }
+}
+function debugShoot(){
+  gameLog('DEBUG debugShoot() phase='+roomPhase+' myTurn='+(currentTurn===myId));
+  if(roomPhase==='PLANNING'&&currentTurn===myId){
+    send({type:'PlayAction',cardType:'SHOOT'});
+  }else if(roomPhase==='ROBBERY'&&choice&&choice.playerId===myId&&choice.kind==='SHOOT_TARGET'){
+    if(choice.options.length>0){choose(choice.options[0]);gameLog('DEBUG auto-target: '+choice.options[0])}
+  }else{
+    gameLog('DEBUG Cannot shoot now');
+  }
+}
+function debugRob(){
+  gameLog('DEBUG debugRob() phase='+roomPhase+' myTurn='+(currentTurn===myId));
+  if(roomPhase==='PLANNING'&&currentTurn===myId){
+    send({type:'PlayAction',cardType:'ROB'});
+  }else if(roomPhase==='ROBBERY'&&choice&&choice.playerId===myId&&choice.kind==='ROB_TOKEN'){
+    if(choice.options.length>0){choose(choice.options[0]);gameLog('DEBUG auto-rob: '+choice.options[0])}
+  }else{
+    gameLog('DEBUG Cannot rob now');
+  }
+}
+function debugPunch(){
+  gameLog('DEBUG debugPunch() phase='+roomPhase+' myTurn='+(currentTurn===myId));
+  if(roomPhase==='PLANNING'&&currentTurn===myId){
+    send({type:'PlayAction',cardType:'PUNCH'});
+  }else{
+    gameLog('DEBUG Cannot punch now');
+  }
+}
+function debugDumpState(){
+  gameLog('=== STATE DUMP ===');
+  gameLog('myId='+myId+' myChar='+myChar+' phase='+roomPhase);
+  gameLog('currentTurn='+currentTurn+' currentTurnMode='+currentTurnMode+' turnIndex='+turnIndex);
+  gameLog('choice='+(choice?JSON.stringify({kind:choice.kind,options:choice.options,playerId:choice.playerId}):'null'));
+  gameLog('hand='+JSON.stringify(hand));
+  gameLog('board='+(board?JSON.stringify({cars:board.cars.map(c=>({i:c.index,inside:c.inside,roof:c.roof,lootIn:c.lootInside,lootRoof:c.lootRoof})),sheriffCar:board.sheriffCar,bandits:board.bandits}):'null'));
+  gameLog('players='+JSON.stringify(players.map(p=>({id:p.id,nick:p.nickname,ch:p.character}))));
+  gameLog('playedCards='+JSON.stringify(playedCards));
+  gameLog('=== END DUMP ===');
+}
+function debugExportLog(){
+  const dbg=$('debug-log');
+  if(!dbg)return;
+  const blob=new Blob([dbg.textContent],{type:'text/plain'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='colt-debug-'+Date.now()+'.log';a.click();
+}
+
+window.addEventListener('DOMContentLoaded',()=>{
+  const n=localStorage.getItem('ce_nick');const a=localStorage.getItem('ce_addr');
+  if(n)$('nickname').value=n;
+  $('server-addr').value=a||location.host||'';
+  // Set dynamic date in newspaper header
+  const now=new Date();const days=['Воскресенье','Понедельник','Вторник','Среда','Четверг','Пятница','Суббота'];
+  const months=['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
+  const dateStr=days[now.getDay()]+', '+now.getDate()+' '+months[now.getMonth()]+' '+now.getFullYear()+' г.';
+  const dateEl=document.querySelector('.dateline span:first-child');
+  if(dateEl)dateEl.textContent=dateStr;
+});
+</script>
+</body>
+</html>

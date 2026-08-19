@@ -1,0 +1,19 @@
+[Unit]
+Description=Colt Express online server (Ktor/Netty)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=colt
+Group=colt
+WorkingDirectory=/opt/colt
+Environment=COLT_APK_PATH=/opt/colt/apk/app-debug.apk
+Environment=COLT_WEB_PATH=/opt/colt/web/index.html
+Environment=JAVA_OPTS=-Xms64m -Xmx512m -Dfile.encoding=UTF-8
+ExecStart=/opt/colt/server/bin/colt-express-server
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

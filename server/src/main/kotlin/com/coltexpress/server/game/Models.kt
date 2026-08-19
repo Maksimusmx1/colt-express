@@ -4,7 +4,7 @@ import com.coltexpress.server.protocol.ChoiceRequired
 
 enum class Phase { PLANNING, ROBBERY, FINISHED }
 enum class ActionType { MOVE, LADDER, SHOOT, ROB, MARSHAL, PUNCH }
-enum class RoundMode { STANDARD, TUNNEL, ON_THE_RUN, TURN_BACK }
+enum class RoundMode { STANDARD, TUNNEL, DOUBLE, TURN_BACK, STATION }
 enum class LootType { WALLET, GEM, CASE }
 enum class ChoiceKind {
     MOVE_DIRECTION,
@@ -13,11 +13,12 @@ enum class ChoiceKind {
     MARSHAL_DIRECTION,
     PUNCH_VICTIM,
     PUNCH_LOOT,
+    PUNCH_TAKE,
     PUNCH_DIRECTION,
-    ON_THE_RUN_OPTION,
+    DOUBLE_OPTION,
 }
 
-data class RoundCard(val turns: Int, val mode: RoundMode)
+data class RoundCard(val turns: Int, val mode: RoundMode, val modes: List<RoundMode> = listOf(mode))
 
 sealed interface GameCard {
     val uid: String
@@ -28,7 +29,7 @@ data class BulletCard(override val uid: String, val ownerId: String?, val neutra
 
 data class LootToken(val uid: String, val type: LootType, val value: Int)
 
-data class PlayedCard(val card: ActionCard, val ownerId: String)
+data class PlayedCard(val card: ActionCard, val ownerId: String, val faceDown: Boolean = false)
 
 class PlayerState(val id: String, val nickname: String, val character: String, val seat: Int) {
     val deck = ArrayDeque<GameCard>()
@@ -38,6 +39,7 @@ class PlayerState(val id: String, val nickname: String, val character: String, v
     var receivedBullets = 0
     var car = 0
     var onRoof = false
+    var firstActionDone = false
 }
 
 class CarState(val index: Int) {
@@ -61,4 +63,5 @@ class PendingChoice(
 class ResolveContext(val played: PlayedCard, val owner: PlayerState) {
     var step = 0
     var victimId: String? = null
+    var droppedToken: LootToken? = null
 }

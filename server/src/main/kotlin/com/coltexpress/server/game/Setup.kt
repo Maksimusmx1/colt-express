@@ -20,14 +20,17 @@ object Setup {
     const val CASE_VALUE = 1000
     const val GEM_VALUE = 500
 
-    // Добыча на полу вагона (индекс таблицы = номер вагона, начиная с 1).
+    // Таблички вагонов: сколько кошельков и самоцветов лежит на полу.
+    // Состав компонентов: 2 кошелька, 4 кошелька, 2 кошелька + 2 самоцвета,
+    // 1 кошелёк + 3 самоцвета, 3 кошелька + 1 самоцвет, 1 кошелёк.
+    // Каждую партию таблички раскладываются по вагонам в случайном порядке.
     private val CAR_TILES: List<Map<LootType, Int>> = listOf(
-        mapOf(LootType.WALLET to 3),
         mapOf(LootType.WALLET to 2),
-        mapOf(LootType.WALLET to 1, LootType.GEM to 1),
-        mapOf(LootType.WALLET to 2, LootType.GEM to 1),
-        mapOf(LootType.WALLET to 3),
-        mapOf(LootType.WALLET to 1, LootType.GEM to 2),
+        mapOf(LootType.WALLET to 4),
+        mapOf(LootType.WALLET to 2, LootType.GEM to 2),
+        mapOf(LootType.WALLET to 1, LootType.GEM to 3),
+        mapOf(LootType.WALLET to 3, LootType.GEM to 1),
+        mapOf(LootType.WALLET to 1),
     )
 
     // 18 кошельков стоимостью 250-500$.
@@ -40,15 +43,33 @@ object Setup {
         500, 500,
     )
 
-    // Колода из 7 карт раундов для 3-6 игроков (вытягиваются 5).
-    private val ROUND_DECK = listOf(
-        RoundCard(4, RoundMode.STANDARD),
-        RoundCard(4, RoundMode.STANDARD),
-        RoundCard(3, RoundMode.STANDARD),
-        RoundCard(2, RoundMode.STANDARD),
-        RoundCard(2, RoundMode.TUNNEL),
-        RoundCard(1, RoundMode.ON_THE_RUN),
-        RoundCard(1, RoundMode.TURN_BACK),
+    // Колода из 7 карт раундов для 5-6 игроков (вытягиваются 4 + 1 станция).
+    private val ROUND_DECK_5_6 = listOf(
+        RoundCard(4, RoundMode.STANDARD, listOf(RoundMode.STANDARD, RoundMode.TUNNEL, RoundMode.STANDARD, RoundMode.STANDARD)),
+        RoundCard(4, RoundMode.STANDARD, listOf(RoundMode.STANDARD, RoundMode.TUNNEL, RoundMode.STANDARD, RoundMode.TUNNEL)),
+        RoundCard(4, RoundMode.STANDARD, listOf(RoundMode.STANDARD, RoundMode.TUNNEL, RoundMode.STANDARD, RoundMode.TURN_BACK)),
+        RoundCard(3, RoundMode.STANDARD, listOf(RoundMode.STANDARD, RoundMode.TUNNEL, RoundMode.STANDARD)),
+        RoundCard(3, RoundMode.DOUBLE, listOf(RoundMode.STANDARD, RoundMode.DOUBLE, RoundMode.TURN_BACK)),
+        RoundCard(3, RoundMode.STANDARD, listOf(RoundMode.STANDARD, RoundMode.STANDARD, RoundMode.TURN_BACK)),
+        RoundCard(2, RoundMode.DOUBLE, listOf(RoundMode.STANDARD, RoundMode.DOUBLE)),
+    )
+
+    // Колода из 7 карт раундов для 2-4 игроков (вытягиваются 4 + 1 станция).
+    private val ROUND_DECK_2_4 = listOf(
+        RoundCard(4, RoundMode.STANDARD, listOf(RoundMode.STANDARD, RoundMode.STANDARD, RoundMode.STANDARD, RoundMode.STANDARD)),
+        RoundCard(5, RoundMode.STANDARD, listOf(RoundMode.STANDARD, RoundMode.TUNNEL, RoundMode.STANDARD, RoundMode.TUNNEL, RoundMode.STANDARD)),
+        RoundCard(5, RoundMode.STANDARD, listOf(RoundMode.STANDARD, RoundMode.STANDARD, RoundMode.TUNNEL, RoundMode.STANDARD, RoundMode.STANDARD)),
+        RoundCard(4, RoundMode.STANDARD, listOf(RoundMode.STANDARD, RoundMode.TUNNEL, RoundMode.STANDARD, RoundMode.STANDARD)),
+        RoundCard(4, RoundMode.TUNNEL, listOf(RoundMode.STANDARD, RoundMode.STANDARD, RoundMode.TUNNEL, RoundMode.TURN_BACK)),
+        RoundCard(3, RoundMode.DOUBLE, listOf(RoundMode.STANDARD, RoundMode.DOUBLE, RoundMode.STANDARD)),
+        RoundCard(4, RoundMode.DOUBLE, listOf(RoundMode.STANDARD, RoundMode.TUNNEL, RoundMode.DOUBLE, RoundMode.STANDARD)),
+    )
+
+    // 3 карты железнодорожных станций (вытягивается 1 для раунда 5).
+    private val STATION_CARDS = listOf(
+        RoundCard(4, RoundMode.STATION, listOf(RoundMode.STANDARD, RoundMode.STANDARD, RoundMode.TUNNEL, RoundMode.STANDARD)),
+        RoundCard(4, RoundMode.STATION, listOf(RoundMode.STANDARD, RoundMode.STANDARD, RoundMode.TUNNEL, RoundMode.STANDARD)),
+        RoundCard(4, RoundMode.STATION, listOf(RoundMode.STANDARD, RoundMode.STANDARD, RoundMode.TUNNEL, RoundMode.STANDARD)),
     )
 
     private val NEUTRAL_BULLET_COUNT = 13
@@ -76,8 +97,8 @@ object Setup {
             }
         }
 
-        // Добыча в вагонах по табличкам.
-        val usedTiles = CAR_TILES.take(carCount)
+        // Добыча в вагонах по табличкам: таблички раскладываются в случайном порядке.
+        val usedTiles = CAR_TILES.shuffled(random).take(carCount)
         for (carIndex in 1..carCount) {
             val tile = usedTiles[carIndex - 1]
             repeat(tile[LootType.WALLET] ?: 0) {
@@ -122,7 +143,11 @@ object Setup {
         val neutralBullets = ArrayDeque<BulletCard>()
         repeat(NEUTRAL_BULLET_COUNT) { neutralBullets.addLast(BulletCard(uuid(), null, neutral = true)) }
 
-        val roundDeck = ROUND_DECK.shuffled(random).take(5)
+        val roundDeck = if (players.size <= 4) {
+            ROUND_DECK_2_4.shuffled(random).take(4) + STATION_CARDS.shuffled(random).take(1)
+        } else {
+            ROUND_DECK_5_6.shuffled(random).take(4) + STATION_CARDS.shuffled(random).take(1)
+        }
         return Engine(players, cars, roundDeck, first.id, neutralBullets, random)
     }
 

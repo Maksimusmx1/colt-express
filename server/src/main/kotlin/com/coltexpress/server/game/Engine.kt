@@ -16,14 +16,14 @@ import com.coltexpress.server.protocol.ShotMissed
 import kotlin.random.Random
 
 sealed interface EngineUpdate {
-    data class RoundStarted(val round: Int, val mode: String, val turns: Int, val firstPlayerId: String) : EngineUpdate
-    data class PlanningTurn(val playerId: String, val mode: String) : EngineUpdate
+    data class RoundStarted(val round: Int, val mode: String, val turns: Int, val firstPlayerId: String, val modes: List<String> = listOf(mode)) : EngineUpdate
+    data class PlanningTurn(val playerId: String, val mode: String, val faceDownAvailable: Boolean, val turnIndex: Int = 0) : EngineUpdate
     data class PlanningChoice(val choice: ChoiceRequired) : EngineUpdate
     data class Robbery(val events: List<GameEvent>, val choice: ChoiceRequired?) : EngineUpdate
     data class GameOver(val results: List<PlayerResult>, val winnerId: String) : EngineUpdate
 }
 
-data class PlayResult(val played: Boolean, val updates: List<EngineUpdate>)
+data class PlayResult(val played: Boolean, val updates: List<EngineUpdate>, val faceDown: Boolean = false)
 data class DrawResult(val drew: Boolean, val updates: List<EngineUpdate>)
 
 private sealed interface Outcome {
@@ -64,6 +64,8 @@ class Engine(
     private var currentActor: String? = null
 
     private var pendingPlays = 0
+    private var turnsPlayed = 0
+    private var playersInTurn = 0
     private var pendingChoice: PendingChoice? = null
     private var resolveCtx: ResolveContext? = null
     private val resolveQueue = ArrayDeque<PlayedCard>()
@@ -71,7 +73,19 @@ class Engine(
     private var choiceCounter = 0
 
     companion object {
-        private val ON_THE_RUN_OPTIONS = listOf("PLAY2", "DRAW6", "DRAW3_PLAY1")
+        private val DOUBLE_OPTIONS = listOf("PLAY2", "DRAW6", "DRAW3_PLAY1")
+        private const val GHOST = "Ghost"
+        private const val CHEYENNE = "Cheyenne"
+        private const val DOC = "Doc"
+        private const val BELLE = "Belle"
+        private const val TUCO = "Tuco"
+        private const val DJANGO = "Django"
+    }
+
+    /** Режим текущего хода раунда. */
+    private fun currentTurnMode(): RoundMode {
+        val modes = roundCard.modes
+        return if (modes.isEmpty()) roundCard.mode else modes[turnsPlayed % modes.size]
     }
 
     fun player(id: String): PlayerState? = byId[id]
@@ -94,12 +108,15 @@ class Engine(
     fun startRound(): List<EngineUpdate> {
         currentRound++
         if (currentRound > 1) firstPlayer = nextSeat(firstPlayer)
+        val fpChar = player(firstPlayer)?.character ?: "?"
+        println("[startRound] round=$currentRound firstPlayer=$fpChar")
         phase = Phase.PLANNING
         players.forEach { p ->
             p.hand.clear()
             p.deck.toMutableList().shuffled(random).let { p.deck.clear(); p.deck.addAll(it) }
-            val n = 6
+            val n = if (p.character == DOC) 7 else 6
             draw(p, n)
+            p.firstActionDone = false
             println("[deal] round $currentRound ${p.nickname} (${p.character}): $n cards -> "
                 + p.hand.filterIsInstance<ActionCard>().joinToString { it.type.name })
         }
@@ -107,33 +124,39 @@ class Engine(
         turnQueue.clear()
         currentActor = null
         pendingPlays = 0
+        turnsPlayed = 0
+        playersInTurn = 0
         pendingChoice = null
         resolveCtx = null
         resolveQueue.clear()
         eventBuffer.clear()
-        buildQueue()
-        return listOf(EngineUpdate.RoundStarted(currentRound, roundCard.mode.name, roundCard.turns, firstPlayer)) +
+        buildQueueForTurn(0)
+        return listOf(EngineUpdate.RoundStarted(currentRound, roundCard.mode.name, roundCard.turns, firstPlayer, roundCard.modes.map { it.name })) +
             advancePlanning()
     }
 
     // ===== Планирование =====
 
-    fun playCard(playerId: String, cardType: String): PlayResult {
+    fun playCard(playerId: String, cardType: String, faceDown: Boolean = false): PlayResult {
         if (phase != Phase.PLANNING || pendingChoice != null || currentActor != playerId) return PlayResult(false, emptyList())
         val p = byId.getValue(playerId)
         val card = p.hand.filterIsInstance<ActionCard>().firstOrNull { it.type.name == cardType }
             ?: return PlayResult(false, emptyList())
         p.hand.remove(card)
-        playStack.add(PlayedCard(card, playerId))
+        val effectiveFaceDown = currentTurnMode() == RoundMode.TUNNEL ||
+            (faceDown && p.character == GHOST && !p.firstActionDone)
+        p.firstActionDone = true
+        playStack.add(PlayedCard(card, playerId, effectiveFaceDown))
         if (pendingPlays > 0) pendingPlays--
-        return PlayResult(true, advancePlanning())
+        return PlayResult(true, advancePlanning(), effectiveFaceDown)
     }
 
     fun drawCards(playerId: String): DrawResult {
         if (phase != Phase.PLANNING || pendingChoice != null || currentActor != playerId) return DrawResult(false, emptyList())
-        if (roundCard.mode == RoundMode.ON_THE_RUN) return DrawResult(false, emptyList())
+        if (currentTurnMode() == RoundMode.DOUBLE) return DrawResult(false, emptyList())
         val p = byId.getValue(playerId)
         draw(p, 3)
+        p.firstActionDone = true
         return DrawResult(true, advancePlanning())
     }
 
@@ -143,18 +166,34 @@ class Engine(
             if (actor == null || actor.hand.none { it is ActionCard }) {
                 pendingPlays = 0
             } else {
-                return listOf(EngineUpdate.PlanningTurn(currentActor!!, roundCard.mode.name))
+                val ti = turnsPlayed % roundCard.modes.size
+                return listOf(EngineUpdate.PlanningTurn(currentActor!!, currentTurnMode().name, faceDownAvailableFor(currentActor!!), ti))
             }
         }
-        if (turnQueue.isEmpty()) return beginRobbery()
+        if (turnQueue.isEmpty()) {
+            if (playersInTurn >= players.size) {
+                turnsPlayed++
+                playersInTurn = 0
+            }
+            if (turnsPlayed >= roundCard.turns) return beginRobbery()
+            buildQueueForTurn(turnsPlayed)
+        }
         val actor = turnQueue.removeFirst()
         currentActor = actor
-        if (roundCard.mode == RoundMode.ON_THE_RUN) {
-            val choice = makeChoice(actor, ChoiceKind.ON_THE_RUN_OPTION, null, ON_THE_RUN_OPTIONS, "PLANNING")
+        val ti = turnsPlayed % roundCard.modes.size
+        if (currentTurnMode() == RoundMode.DOUBLE) {
+            val choice = makeChoice(actor, ChoiceKind.DOUBLE_OPTION, null, DOUBLE_OPTIONS, "PLANNING")
             pendingChoice = choice
             return listOf(EngineUpdate.PlanningChoice(choice.toRequest()))
         }
-        return listOf(EngineUpdate.PlanningTurn(actor, roundCard.mode.name))
+        playersInTurn++
+        return listOf(EngineUpdate.PlanningTurn(actor, currentTurnMode().name, faceDownAvailableFor(actor), ti))
+    }
+
+    /** Способность Призрака: первый ход раунда можно сыграть взакрытую. */
+    private fun faceDownAvailableFor(playerId: String): Boolean {
+        val p = byId[playerId] ?: return false
+        return p.character == GHOST && !p.firstActionDone
     }
 
     // ===== Ограбление =====
@@ -191,10 +230,19 @@ class Engine(
             val ctx = resolveCtx!!
             when (val out = stepResolve(ctx)) {
                 is Outcome.NeedInput -> {
-                    pendingChoice = out.choice
+                    val choice = out.choice
+                    if (choice.kind == ChoiceKind.PUNCH_DIRECTION && choice.options.size == 1) {
+                        val done = applyStep(ctx, choice.options.single())
+                        if (done) {
+                            ctx.owner.deck.addFirst(ctx.played.card)
+                            resolveCtx = null
+                        }
+                        continue
+                    }
+                    pendingChoice = choice
                     val ev = eventBuffer.toList()
                     eventBuffer.clear()
-                    return listOf(EngineUpdate.Robbery(ev, out.choice.toRequest()))
+                    return listOf(EngineUpdate.Robbery(ev, choice.toRequest()))
                 }
                 is Outcome.Complete -> {
                     ctx.owner.deck.addFirst(ctx.played.card)
@@ -222,9 +270,9 @@ class Engine(
         val c = pendingChoice ?: return emptyList()
         if (c.playerId != playerId || c.id != choiceId || value !in c.options) return emptyList()
         if (phase == Phase.PLANNING) {
-            if (c.kind != ChoiceKind.ON_THE_RUN_OPTION) return emptyList()
+            if (c.kind != ChoiceKind.DOUBLE_OPTION) return emptyList()
             pendingChoice = null
-            return applyOnTheRunOption(value)
+            return applyDoubleOption(value)
         }
         pendingChoice = null
         val ctx = resolveCtx ?: return emptyList()
@@ -236,9 +284,10 @@ class Engine(
         return continueRobbery()
     }
 
-    /** Применяет выбранный вариант «Разгона» (2 действия игрока). */
-    private fun applyOnTheRunOption(value: String): List<EngineUpdate> {
+    /** Применяет выбранный вариант «Сдвоенного хода» (2 действия игрока). */
+    private fun applyDoubleOption(value: String): List<EngineUpdate> {
         val p = byId[currentActor ?: return emptyList()] ?: return emptyList()
+        playersInTurn++
         when (value) {
             "PLAY2" -> pendingPlays = 2
             "DRAW6" -> {
@@ -298,11 +347,16 @@ class Engine(
                     }
                     1 -> {
                         val victim = byId.getValue(ctx.victimId!!)
-                        if (victim.loot.isEmpty()) {
-                            ctx.step = 2
-                            Outcome.NeedInput(makeChoice(p.id, ChoiceKind.PUNCH_DIRECTION, ActionType.PUNCH, punchDirections(victim), "ROBBERY"))
+                        val token = chooseDropToken(victim)
+                        if (token != null) {
+                            applyPunchDrop(victim, token)
+                            ctx.droppedToken = token
+                        }
+                        val dropped = ctx.droppedToken
+                        if (dropped != null && dropped.type == LootType.WALLET && p.character == CHEYENNE) {
+                            Outcome.NeedInput(makeChoice(p.id, ChoiceKind.PUNCH_TAKE, ActionType.PUNCH, listOf("TAKE", "LEAVE"), "ROBBERY"))
                         } else {
-                            Outcome.NeedInput(makeChoice(p.id, ChoiceKind.PUNCH_LOOT, ActionType.PUNCH, victim.loot.map { it.uid }, "ROBBERY"))
+                            Outcome.NeedInput(makeChoice(p.id, ChoiceKind.PUNCH_DIRECTION, ActionType.PUNCH, punchDirections(victim), "ROBBERY"))
                         }
                     }
                     2 -> {
@@ -347,9 +401,19 @@ class Engine(
                     false
                 }
                 1 -> {
-                    applyPunchDrop(p, byId.getValue(ctx.victimId!!), value)
-                    ctx.step = 2
-                    false
+                    if (value == "TAKE" || value == "LEAVE") {
+                        val victim = byId.getValue(ctx.victimId!!)
+                        if (value == "TAKE") {
+                            ctx.droppedToken?.let { applyCheyenneTake(p, victim, it) }
+                        }
+                        ctx.droppedToken = null
+                        ctx.step = 2
+                        false
+                    } else {
+                        applyPunchMove(ctx.victimId!!, value)
+                        ctx.step = 3
+                        true
+                    }
                 }
                 else -> {
                     applyPunchMove(ctx.victimId!!, value)
@@ -388,6 +452,18 @@ class Engine(
         target.receivedBullets++
         eventBuffer += Shot(shooter.id, targetId)
         eventBuffer += BulletReceived(targetId, fromId = shooter.id, neutral = false)
+        if (shooter.character == DJANGO) pushTarget(shooter, target)
+    }
+
+    /** Способность Джанго: выстрел отбрасывает цель на 1 вагон в направлении выстрела. Уровень сохраняется, за пределы поезда — нельзя. */
+    private fun pushTarget(shooter: PlayerState, target: PlayerState) {
+        if (target.car == shooter.car) return
+        val to = target.car + if (target.car > shooter.car) 1 else -1
+        if (to < 0 || to > cars.lastIndex) return
+        val from = target.car
+        movePlayer(target, to)
+        eventBuffer += BanditMoved(target.id, from, to, target.onRoof)
+        if (!target.onRoof) sheriffEncounter()
     }
 
     private fun applyRob(p: PlayerState, tokenUid: String) {
@@ -406,13 +482,21 @@ class Engine(
         sheriffEncounter()
     }
 
-    private fun applyPunchDrop(attacker: PlayerState, victim: PlayerState, tokenUid: String) {
-        val token = victim.loot.firstOrNull { it.uid == tokenUid } ?: return
+    private fun applyPunchDrop(victim: PlayerState, token: LootToken) {
         victim.loot.remove(token)
-        val car = cars[attacker.car]
-        val list = if (attacker.onRoof) car.lootRoof else car.lootInside
+        val car = cars[victim.car]
+        val list = if (victim.onRoof) car.lootRoof else car.lootInside
         list.add(token)
-        eventBuffer += LootDropped(attacker.id, attacker.car, attacker.onRoof, token.type.name, revealValue(token))
+        eventBuffer += LootDropped(victim.id, victim.car, victim.onRoof, token.type.name, revealValue(token))
+    }
+
+    /** Шайенн может сразу забрать кошелёк, упавший с жертвы при ударе. */
+    private fun applyCheyenneTake(attacker: PlayerState, victim: PlayerState, token: LootToken) {
+        val car = cars[victim.car]
+        val list = if (victim.onRoof) car.lootRoof else car.lootInside
+        list.remove(token)
+        attacker.loot.add(token)
+        eventBuffer += LootTaken(attacker.id, victim.car, victim.onRoof, token.type.name, revealValue(token))
     }
 
     private fun applyPunchMove(victimId: String, value: String) {
@@ -486,6 +570,7 @@ class Engine(
         } else {
             if (p.car > 0) targets += cars[p.car - 1].inside
             if (p.car < cars.lastIndex) targets += cars[p.car + 1].inside
+            if (p.character == TUCO) targets += cars[p.car].roof
         }
         return eligibleTargets(targets)
     }
@@ -495,8 +580,11 @@ class Engine(
         return eligibleTargets(set.filter { it != p.id })
     }
 
-    /** Возвращает цели без учёта способностей персонажей (стандартные правила). */
-    private fun eligibleTargets(targets: List<String>): List<String> = targets
+    /** Возвращает цели с учётом способности Красотки: она не цель, пока есть другая цель. */
+    private fun eligibleTargets(targets: List<String>): List<String> {
+        if (targets.size <= 1) return targets
+        return targets.filter { byId.getValue(it).character != BELLE }
+    }
 
     private fun punchDirections(victim: PlayerState): List<String> {
         val opts = mutableListOf<String>()
@@ -517,6 +605,18 @@ class Engine(
         return if (p.onRoof) car.lootRoof else car.lootInside
     }
 
+    /**
+     * Жетон, который жертва теряет при ударе: если есть самоцвет или сейф — теряется
+     * самое ценное, иначе случайный кошелёк.
+     */
+    private fun chooseDropToken(victim: PlayerState): LootToken? {
+        if (victim.loot.isEmpty()) return null
+        return if (victim.loot.any { it.type != LootType.WALLET })
+            victim.loot.maxBy { it.value }
+        else
+            victim.loot[random.nextInt(victim.loot.size)]
+    }
+
     private fun draw(p: PlayerState, n: Int) {
         repeat(n) { p.deck.removeFirstOrNull()?.let { p.hand.add(it) } }
     }
@@ -535,22 +635,20 @@ class Engine(
         return c
     }
 
-    private fun buildQueue() {
+    private fun buildQueueForTurn(turnIdx: Int) {
         turnQueue.clear()
-        val order = orderForMode()
-        if (roundCard.mode == RoundMode.ON_THE_RUN) {
-            order.forEach { turnQueue.addLast(it) }
-        } else {
-            repeat(roundCard.turns) { order.forEach { turnQueue.addLast(it) } }
-        }
-    }
-
-    private fun orderForMode(): List<String> {
+        val modes = roundCard.modes
+        val mode = if (modes.isEmpty()) roundCard.mode else modes[turnIdx % modes.size]
         val cw = clockwiseOrder(firstPlayer)
-        if (roundCard.mode == RoundMode.TURN_BACK) {
-            return listOf(firstPlayer) + cw.filter { it != firstPlayer }.reversed()
+        val order = if (mode == RoundMode.TURN_BACK) {
+            listOf(firstPlayer) + cw.filter { it != firstPlayer }.reversed()
+        } else {
+            cw
         }
-        return cw
+        val fpChar = player(firstPlayer)?.character ?: "?"
+        val orderChars = order.map { id -> player(id)?.character ?: "?" }
+        println("[buildQueue] round=$currentRound turn=$turnIdx mode=$mode firstPlayer=$fpChar order=$orderChars")
+        order.forEach { turnQueue.addLast(it) }
     }
 
     private fun clockwiseOrder(start: String): List<String> {
