@@ -42,6 +42,12 @@ Copy-Item (Join-Path $root "android\app\build\outputs\apk\debug\app-debug.apk") 
 $webDist = Join-Path $dist "web"
 New-Item -ItemType Directory -Force -Path $webDist | Out-Null
 Copy-Item (Join-Path $root "web\index.html") (Join-Path $webDist "index.html") -Force
+$train3dSrc = Join-Path $root "web\train3d"
+if (Test-Path $train3dSrc) {
+    $train3dDst = Join-Path $webDist "train3d"
+    New-Item -ItemType Directory -Force -Path $train3dDst | Out-Null
+    Copy-Item (Join-Path $train3dSrc "index.html") (Join-Path $train3dDst "index.html") -Force
+}
 Copy-Item (Join-Path $PSScriptRoot "install.sh")            (Join-Path $dist "install.sh") -Force
 Copy-Item (Join-Path $PSScriptRoot "colt-express.service")  (Join-Path $dist "colt-express.service") -Force
 Copy-Item (Join-Path $PSScriptRoot "nginx-colt.conf")        (Join-Path $dist "nginx-colt.conf") -Force

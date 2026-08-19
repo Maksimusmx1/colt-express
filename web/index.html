@@ -271,29 +271,28 @@ input,select{font-family:inherit}
       </div>
     </div>
   </div>
-</div>
-
-<div class="debug-panel">
-  <details>
-    <summary>Отладка</summary>
-    <div class="debug-controls" id="debug-controls">
-      <span class="label">Шериф:</span>
-      <button id="dbg-sheriff-fwd" onclick="debugSheriff('F')">→ Вправо</button>
-      <button id="dbg-sheriff-back" onclick="debugSheriff('B')">← Влево</button>
-      <div class="dbg-sep"></div>
-      <span class="label">Бандит:</span>
-      <button id="dbg-bandit-fwd" onclick="debugMove('F')">→ Вперёд</button>
-      <button id="dbg-bandit-back" onclick="debugMove('B')">← Назад</button>
-      <button id="dbg-bandit-ladder" onclick="debugLadder()">Лестница</button>
-      <button id="dbg-bandit-shoot" onclick="debugShoot()">Выстрел</button>
-      <button id="dbg-bandit-rob" onclick="debugRob()">Кража</button>
-      <button id="dbg-bandit-punch" onclick="debugPunch()">Удар</button>
-      <div class="dbg-sep"></div>
-      <button onclick="debugDumpState()">State</button>
-      <button onclick="debugExportLog()">Export Log</button>
-    </div>
-    <div class="debug-log" id="debug-log"></div>
-  </details>
+  <div class="debug-panel">
+    <details>
+      <summary>Отладка</summary>
+      <div class="debug-controls" id="debug-controls">
+        <span class="label">Шериф:</span>
+        <button id="dbg-sheriff-fwd" onclick="debugSheriff('F')">→ Вправо</button>
+        <button id="dbg-sheriff-back" onclick="debugSheriff('B')">← Влево</button>
+        <div class="dbg-sep"></div>
+        <span class="label">Бандит:</span>
+        <button id="dbg-bandit-fwd" onclick="debugMove('F')">→ Вперёд</button>
+        <button id="dbg-bandit-back" onclick="debugMove('B')">← Назад</button>
+        <button id="dbg-bandit-ladder" onclick="debugLadder()">Лестница</button>
+        <button id="dbg-bandit-shoot" onclick="debugShoot()">Выстрел</button>
+        <button id="dbg-bandit-rob" onclick="debugRob()">Кража</button>
+        <button id="dbg-bandit-punch" onclick="debugPunch()">Удар</button>
+        <div class="dbg-sep"></div>
+        <button onclick="debugDumpState()">State</button>
+        <button onclick="debugExportLog()">Export Log</button>
+      </div>
+      <div class="debug-log" id="debug-log"></div>
+    </details>
+  </div>
 </div>
 
 <div id="choice-overlay" class="choice-overlay hidden">

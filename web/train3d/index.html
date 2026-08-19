@@ -1,0 +1,1254 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>3D поезд Colt Express</title>
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; background: #0a0a0a; overflow: hidden; font-family: 'Segoe UI', sans-serif; color: #e0e0e0; }
+  #c { display: block; width: 100vw; height: 100vh; }
+  #title { position: fixed; top: 6px; left: 8px; background: rgba(0,0,0,0.65); color: #d4a040; padding: 4px 10px; border-radius: 4px; font-size: 11px; letter-spacing: 1px; z-index: 10; pointer-events: none; }
+  #status { position: fixed; top: 26px; left: 8px; background: rgba(0,0,0,0.65); color: #d4a040; padding: 4px 10px; border-radius: 4px; font-size: 11px; z-index: 10; pointer-events: none; font-family: monospace; }
+  #views { position: fixed; top: 6px; right: 8px; background: rgba(0,0,0,0.65); padding: 4px; border-radius: 4px; z-index: 10; }
+  #views button { background: transparent; color: #d4a040; border: 1px solid rgba(212,160,64,0.4); padding: 4px 8px; margin-left: 2px; border-radius: 3px; font-size: 11px; cursor: pointer; }
+  #views button:hover { background: rgba(212,160,64,0.2); }
+  #views button.active { background: #d4a040; color: #1a1a1a; }
+  #players { position: fixed; top: 38px; right: 8px; background: rgba(0,0,0,0.65); padding: 4px 6px; border-radius: 4px; z-index: 10; color: #d4a040; font-size: 11px; }
+  #players button { background: transparent; color: #d4a040; border: 1px solid rgba(212,160,64,0.4); padding: 4px 8px; margin-left: 2px; border-radius: 3px; font-size: 11px; cursor: pointer; }
+  #players button:hover { background: rgba(212,160,64,0.2); }
+  #players button.active { background: #d4a040; color: #1a1a1a; }
+  #legend { position: fixed; bottom: 8px; right: 8px; background: rgba(0,0,0,0.65); padding: 6px; border-radius: 6px; z-index: 10; color: #d4a040; font-size: 11px; }
+  #hover { position: fixed; background: rgba(0,0,0,0.85); color: #d4a040; padding: 6px 10px; border-radius: 4px; font-size: 12px; z-index: 10; pointer-events: none; display: none; border: 1px solid #3a3a3a; }
+</style>
+</head>
+<body>
+<div id="title">ПАРОВОЗ «ЭКСПРЕСС» · 1905 г.</div>
+<div id="status">ожидание state…</div>
+<div id="views">
+  <button data-view="top" class="active">Сверху</button>
+  <button data-view="three">3/4</button>
+  <button data-view="side">Сбоку</button>
+  <button data-view="close">Кабина</button>
+  <button data-view="orbit">Обзор 360°</button>
+</div>
+<canvas id="c"></canvas>
+<div id="hover"></div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// === STATE (set from host page via setState/postMessage) ===
+let STATE_DATA = null;
+let STATE_MODE = false; // true = real game state; false = default beautiful design
+
+// Cab geometry parameters (shared between buildLocomotive, addEngineer, and rebuild).
+const cabCx = -2.4;     // cab center X (in loco local space)
+const cabLen = 3.0;     // cab length — extended for sheriff + 2 briefcases
+const cabCornerH = 1.70; // cab corner post height
+
+function updateStatus() {
+  const el = document.getElementById('status');
+  if (!el) return;
+  if (!STATE_MODE || !STATE_DATA) {
+    el.textContent = 'ожидание state…';
+    return;
+  }
+  const n = (STATE_DATA.players || []).length;
+  el.textContent = `state: cars=${STATE_DATA.cars.length} игроков=${n} шериф=${STATE_DATA.sheriffCar}${STATE_DATA.sheriffOnRoof ? '↑' : ''}`;
+}
+function applyState(json) {
+  try {
+    const data = typeof json === 'string' ? JSON.parse(json) : json;
+    if (data && Array.isArray(data.cars)) {
+      STATE_DATA = data;
+      STATE_MODE = true;
+      rebuild();
+      updateStatus();
+      console.log('[3D] applied state: cars=', data.cars.length, 'sheriffCar=', data.sheriffCar, 'sheriffOnRoof=', data.sheriffOnRoof, 'players=', (data.players||[]).length);
+      // Log each car's content for debugging.
+      data.cars.forEach((c, i) => {
+        console.log(`[3D] car ${c.index}: insideLoot=${(c.lootInside||[]).length}, insidePlayers=${(c.inside||[]).length}, roofLoot=${(c.lootRoof||[]).length}, roofPlayers=${(c.roof||[]).length}`);
+      });
+      console.log('[3D] players:', (data.players||[]).map(p => p.id + ':' + p.character).join(', '));
+    } else {
+      console.warn('[3D] applyState: payload has no cars array', data);
+    }
+  } catch (e) { console.error('[3D] applyState error', e); }
+}
+window.setState = applyState;
+window.addEventListener('message', (e) => {
+  if (e.data && e.data.type === 'setState') applyState(e.data.payload);
+});
+
+// === Three.js setup ===
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.0;
+
+const scene = new THREE.Scene();
+const skyGeo = new THREE.SphereGeometry(400, 32, 16);
+const skyMat = new THREE.ShaderMaterial({
+  uniforms: { topColor: { value: new THREE.Color(0x6b8caf) }, bottomColor: { value: new THREE.Color(0xe8c898) } },
+  vertexShader: `varying vec3 vWorldPosition; void main(){ vec4 wp = modelMatrix * vec4(position,1.0); vWorldPosition = wp.xyz; gl_Position = projectionMatrix * viewMatrix * wp; }`,
+  fragmentShader: `uniform vec3 topColor; uniform vec3 bottomColor; varying vec3 vWorldPosition; void main(){ float h = normalize(vWorldPosition).y; gl_FragColor = vec4(mix(bottomColor, topColor, max(h, 0.0)), 1.0); }`,
+  side: THREE.BackSide, depthWrite: false
+});
+scene.add(new THREE.Mesh(skyGeo, skyMat));
+scene.fog = new THREE.Fog(0xc8b890, 80, 250);
+
+const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
+camera.position.set(0, 35, 35);
+const controls = new OrbitControls(camera, canvas);
+controls.target.set(0, 1.0, 0);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.minDistance = 6;
+controls.maxDistance = 120;
+controls.maxPolarAngle = Math.PI * 0.49;
+
+const hemi = new THREE.HemisphereLight(0xfff4d8, 0x5a4a30, 0.5);
+scene.add(hemi);
+const sun = new THREE.DirectionalLight(0xfff0d0, 1.4);
+sun.position.set(30, 40, 20);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.left = -50; sun.shadow.camera.right = 50;
+sun.shadow.camera.top = 50; sun.shadow.camera.bottom = -50;
+sun.shadow.camera.near = 1; sun.shadow.camera.far = 100;
+sun.shadow.bias = -0.0005;
+scene.add(sun);
+const fill = new THREE.DirectionalLight(0x9bb8d4, 0.35);
+fill.position.set(-20, 10, -10);
+scene.add(fill);
+
+const ground = new THREE.Mesh(
+  new THREE.PlaneGeometry(150, 60),
+  new THREE.MeshStandardMaterial({ color: 0x6b6052, roughness: 0.95 })
+);
+ground.rotation.x = -Math.PI / 2;
+ground.position.y = -0.01;
+ground.receiveShadow = true;
+scene.add(ground);
+
+const sleeperMat = new THREE.MeshStandardMaterial({ color: 0x4a3520, roughness: 0.9 });
+for (let z = -25; z <= 25; z += 0.9) {
+  const s = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.08, 0.18), sleeperMat);
+  s.position.set(0, 0.04, z);
+  s.receiveShadow = true;
+  scene.add(s);
+}
+const railMat = new THREE.MeshStandardMaterial({ color: 0x4a4a4a, metalness: 0.7, roughness: 0.4 });
+for (const x of [-0.95, 0.95]) {
+  const rail = new THREE.Mesh(new THREE.BoxGeometry(80, 0.12, 0.12), railMat);
+  rail.position.set(0, 0.16, x);
+  rail.castShadow = true;
+  scene.add(rail);
+}
+
+const mat = {
+  locoBody: new THREE.MeshStandardMaterial({ color: 0x1f3a25, roughness: 0.55, metalness: 0.2 }),
+  locoAccent: new THREE.MeshStandardMaterial({ color: 0x6a4a1a, roughness: 0.6, metalness: 0.3 }),
+  brass: new THREE.MeshStandardMaterial({ color: 0xb88a3a, roughness: 0.35, metalness: 0.85 }),
+  boiler: new THREE.MeshStandardMaterial({ color: 0x14201a, roughness: 0.4, metalness: 0.5 }),
+  boilerBand: new THREE.MeshStandardMaterial({ color: 0x9a7028, roughness: 0.4, metalness: 0.7 }),
+  wheel: new THREE.MeshStandardMaterial({ color: 0x8a1a1a, roughness: 0.5, metalness: 0.3 }),
+  wheelHub: new THREE.MeshStandardMaterial({ color: 0xd4a040, roughness: 0.4, metalness: 0.7 }),
+  rod: new THREE.MeshStandardMaterial({ color: 0x2a2a2a, roughness: 0.5, metalness: 0.5 }),
+  wood: new THREE.MeshStandardMaterial({ color: 0x5a3a20, roughness: 0.85 }),
+  woodDark: new THREE.MeshStandardMaterial({ color: 0x3a2818, roughness: 0.9 }),
+  woodLight: new THREE.MeshStandardMaterial({ color: 0x8a6a40, roughness: 0.85 }),
+  iron: new THREE.MeshStandardMaterial({ color: 0x3a3a3a, roughness: 0.5, metalness: 0.6 }),
+  glass: new THREE.MeshStandardMaterial({ color: 0xa0c0d8, roughness: 0.1, metalness: 0.3, transparent: true, opacity: 0.7 }),
+  skin: new THREE.MeshStandardMaterial({ color: 0xd4b48a, roughness: 0.75 }),
+  skinDark: new THREE.MeshStandardMaterial({ color: 0x8a6a4a, roughness: 0.75 }),
+  hairBlack: new THREE.MeshStandardMaterial({ color: 0x1a1410, roughness: 0.85 }),
+  hairBrown: new THREE.MeshStandardMaterial({ color: 0x3a2418, roughness: 0.85 }),
+  hairBlond: new THREE.MeshStandardMaterial({ color: 0xb88a40, roughness: 0.85 }),
+  uniformCoat: new THREE.MeshStandardMaterial({ color: 0x1f2a3a, roughness: 0.7 }),
+  uniformPant: new THREE.MeshStandardMaterial({ color: 0x1a1a2a, roughness: 0.7 }),
+  cap: new THREE.MeshStandardMaterial({ color: 0x0a1a2a, roughness: 0.7 }),
+  capBand: new THREE.MeshStandardMaterial({ color: 0xd4a040, roughness: 0.5, metalness: 0.4 }),
+  // Loot.
+  pouch: new THREE.MeshStandardMaterial({ color: 0xb88840, roughness: 0.85 }),
+  pouchDark: new THREE.MeshStandardMaterial({ color: 0x8a6a30, roughness: 0.85 }),
+  gem: new THREE.MeshStandardMaterial({ color: 0x5cf0e0, roughness: 0.15, metalness: 0.6, emissive: 0x104040, emissiveIntensity: 0.3 }),
+  gemRed: new THREE.MeshStandardMaterial({ color: 0xf04848, roughness: 0.15, metalness: 0.6, emissive: 0x401010, emissiveIntensity: 0.3 }),
+  briefcase: new THREE.MeshStandardMaterial({ color: 0x5a3a20, roughness: 0.65 }),
+  briefcaseDark: new THREE.MeshStandardMaterial({ color: 0x3a2418, roughness: 0.65 }),
+  briefcaseMetal: new THREE.MeshStandardMaterial({ color: 0xc8a040, roughness: 0.3, metalness: 0.85 }),
+  paper: new THREE.MeshStandardMaterial({ color: 0xf0e8d0, roughness: 0.95 }),
+  coin: new THREE.MeshStandardMaterial({ color: 0xf0c050, roughness: 0.25, metalness: 0.95 }),
+  sack: new THREE.MeshStandardMaterial({ color: 0x8a6a40, roughness: 0.95 }),
+  sackLight: new THREE.MeshStandardMaterial({ color: 0xa88850, roughness: 0.95 }),
+  gold: new THREE.MeshStandardMaterial({ color: 0xd4a040, roughness: 0.3, metalness: 0.9, emissive: 0x4a3010, emissiveIntensity: 0.15 }),
+  rope: new THREE.MeshStandardMaterial({ color: 0x4a3a20, roughness: 0.95 }),
+  // Passengers.
+  passengerRed: new THREE.MeshStandardMaterial({ color: 0x8a3030, roughness: 0.7 }),
+  passengerBlue: new THREE.MeshStandardMaterial({ color: 0x305080, roughness: 0.7 }),
+  passengerBrown: new THREE.MeshStandardMaterial({ color: 0x5a3a20, roughness: 0.7 }),
+  passengerGreen: new THREE.MeshStandardMaterial({ color: 0x406040, roughness: 0.7 }),
+  passengerCream: new THREE.MeshStandardMaterial({ color: 0xb8a878, roughness: 0.7 }),
+  passengerBlack: new THREE.MeshStandardMaterial({ color: 0x2a2a2a, roughness: 0.7 }),
+  topHat: new THREE.MeshStandardMaterial({ color: 0x0a0a0a, roughness: 0.6 }),
+  bowlerHat: new THREE.MeshStandardMaterial({ color: 0x1a1410, roughness: 0.6 }),
+  bonnet: new THREE.MeshStandardMaterial({ color: 0xb8a8c8, roughness: 0.7 }),
+  dressRed: new THREE.MeshStandardMaterial({ color: 0x8a2828, roughness: 0.7 }),
+  dressBlue: new THREE.MeshStandardMaterial({ color: 0x305080, roughness: 0.7 }),
+  dressGreen: new THREE.MeshStandardMaterial({ color: 0x406040, roughness: 0.7 }),
+  dressPurple: new THREE.MeshStandardMaterial({ color: 0x5a3a6a, roughness: 0.7 }),
+  dressCream: new THREE.MeshStandardMaterial({ color: 0xc8b888, roughness: 0.7 }),
+  suitBlack: new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.7 }),
+  suitBrown: new THREE.MeshStandardMaterial({ color: 0x3a2418, roughness: 0.7 }),
+  suitNavy: new THREE.MeshStandardMaterial({ color: 0x1a2a4a, roughness: 0.7 }),
+  suitGray: new THREE.MeshStandardMaterial({ color: 0x5a5a5a, roughness: 0.7 }),
+  trimGold: new THREE.MeshStandardMaterial({ color: 0xd4a040, roughness: 0.5, metalness: 0.4 }),
+};
+
+function characterColor(c) {
+  switch (c) {
+    case 'Doc': return new THREE.MeshStandardMaterial({ color: 0x03a9f4, roughness: 0.7 });
+    case 'Django': return new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.7 });
+    case 'Cheyenne': return new THREE.MeshStandardMaterial({ color: 0x2e7d32, roughness: 0.7 });
+    case 'Tuco': return new THREE.MeshStandardMaterial({ color: 0xc62828, roughness: 0.7 });
+    case 'Ghost': return new THREE.MeshStandardMaterial({ color: 0x546e7a, roughness: 0.7 });
+    case 'Belle': return new THREE.MeshStandardMaterial({ color: 0x7b1fa2, roughness: 0.7 });
+    default: return new THREE.MeshStandardMaterial({ color: 0x03a9f4, roughness: 0.7 });
+  }
+}
+
+function rng(seed) { let s = seed; return () => { s = (s * 9301 + 49297) % 233280; return s / 233280; }; }
+
+function box(w, h, d, material, parent, x=0, y=0, z=0) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
+  m.position.set(x, y, z);
+  m.castShadow = true; m.receiveShadow = true;
+  parent.add(m);
+  return m;
+}
+function cyl(rt, rb, h, seg, material, parent, x=0, y=0, z=0, rotX=0, rotZ=0) {
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, seg), material);
+  m.position.set(x, y, z);
+  if (rotX) m.rotation.x = rotX;
+  if (rotZ) m.rotation.z = rotZ;
+  m.castShadow = true; m.receiveShadow = true;
+  parent.add(m);
+  return m;
+}
+
+// === Person (used both in default design and game state) ===
+function makePerson(parent, x, y, z, opts = {}) {
+  const r = opts.rng || Math.random;
+  const gender = opts.gender || (r() < 0.5 ? 'm' : 'w');
+  const isChild = opts.child || false;
+  const skinTone = r() < 0.85 ? mat.skin : mat.skinDark;
+  const hairTones = [mat.hairBlack, mat.hairBrown, mat.hairBlond];
+  const hairTone = hairTones[Math.floor(r() * hairTones.length)];
+  const scl = isChild ? 0.72 : 1.0;
+  const person = new THREE.Group();
+  person.position.set(x, y, z);
+  person.rotation.y = (opts.rotY !== undefined) ? opts.rotY : (r() - 0.5) * 0.5;
+  parent.add(person);
+
+  if (gender === 'w' && r() < 0.85) {
+    const dressM = [mat.dressRed, mat.dressBlue, mat.dressGreen, mat.dressPurple, mat.dressCream, mat.suitBrown][Math.floor(r() * 6)];
+    cyl(0.20 * scl, 0.32 * scl, 0.55 * scl, 12, dressM, person, 0, 0.55 * scl, 0);
+    const belt = new THREE.Mesh(new THREE.TorusGeometry(0.22 * scl, 0.015, 6, 16), mat.briefcaseMetal);
+    belt.rotation.x = Math.PI / 2;
+    belt.position.y = 0.78 * scl;
+    person.add(belt);
+  } else if (gender === 'm') {
+    const pantsM = [mat.suitBlack, mat.suitNavy, mat.suitGray, mat.suitBrown][Math.floor(r() * 4)];
+    cyl(0.13 * scl, 0.13 * scl, 0.55 * scl, 8, pantsM, person, 0, 0.55 * scl, 0);
+  } else {
+    cyl(0.16 * scl, 0.26 * scl, 0.40 * scl, 10, mat.dressCream, person, 0, 0.45 * scl, 0);
+  }
+
+  if (gender === 'm') {
+    const coatM = [mat.suitBlack, mat.suitNavy, mat.suitGray, mat.suitBrown, mat.uniformCoat][Math.floor(r() * 5)];
+    cyl(0.18 * scl, 0.16 * scl, 0.45 * scl, 12, coatM, person, 0, 1.05 * scl, 0);
+  } else {
+    const dressM = [mat.dressRed, mat.dressBlue, mat.dressGreen, mat.dressPurple, mat.dressCream, mat.suitBrown][Math.floor(r() * 6)];
+    cyl(0.18 * scl, 0.16 * scl, 0.35 * scl, 12, dressM, person, 0, 1.00 * scl, 0);
+    cyl(0.16 * scl, 0.16 * scl, 0.06 * scl, 12, new THREE.MeshStandardMaterial({ color: 0xf0e8d0, roughness: 0.9 }), person, 0, 1.20 * scl, 0);
+  }
+
+  const armColor = gender === 'm' ? mat.suitBlack : mat.dressCream;
+  for (const az of [-0.22, 0.22]) {
+    const arm = cyl(0.05 * scl, 0.05 * scl, 0.45 * scl, 8, armColor, person, 0, 1.0 * scl, az * scl);
+    arm.rotation.x = (r() - 0.5) * 0.3;
+    const hand = new THREE.Mesh(new THREE.SphereGeometry(0.055 * scl, 8, 6), skinTone);
+    hand.position.set(0, (1.0 - 0.225) * scl, az * scl);
+    hand.castShadow = true;
+    person.add(hand);
+  }
+  const neck = cyl(0.07 * scl, 0.07 * scl, 0.08 * scl, 8, skinTone, person, 0, 1.32 * scl, 0);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.13 * scl, 12, 10), skinTone);
+  head.position.set(0, 1.45 * scl, 0);
+  head.castShadow = true;
+  person.add(head);
+  if (gender === 'w') {
+    const hair = new THREE.Mesh(new THREE.SphereGeometry(0.135 * scl, 12, 10, 0, Math.PI*2, 0, Math.PI*0.55), hairTone);
+    hair.position.set(0, 1.45 * scl, -0.01 * scl);
+    person.add(hair);
+    if (r() < 0.5) {
+      const bun = new THREE.Mesh(new THREE.SphereGeometry(0.08 * scl, 10, 8), hairTone);
+      bun.position.set(0, 1.40 * scl, -0.13 * scl);
+      person.add(bun);
+    }
+  } else {
+    const hair = new THREE.Mesh(new THREE.SphereGeometry(0.135 * scl, 12, 10, 0, Math.PI*2, 0, Math.PI*0.50), hairTone);
+    hair.position.set(0, 1.46 * scl, -0.01 * scl);
+    person.add(hair);
+  }
+  const hatRoll = r();
+  if (gender === 'm') {
+    if (hatRoll < 0.35) {
+      cyl(0.13 * scl, 0.13 * scl, 0.20 * scl, 12, mat.topHat, person, 0, 1.65 * scl, 0);
+      cyl(0.18 * scl, 0.18 * scl, 0.02 * scl, 16, mat.topHat, person, 0, 1.55 * scl, 0);
+      cyl(0.135 * scl, 0.135 * scl, 0.03 * scl, 12, mat.briefcaseMetal, person, 0, 1.65 * scl, 0);
+    } else if (hatRoll < 0.7) {
+      cyl(0.14 * scl, 0.16 * scl, 0.10 * scl, 14, mat.bowlerHat, person, 0, 1.58 * scl, 0);
+      cyl(0.18 * scl, 0.18 * scl, 0.02 * scl, 16, mat.bowlerHat, person, 0, 1.53 * scl, 0);
+    }
+  } else {
+    if (hatRoll < 0.6) {
+      cyl(0.16 * scl, 0.18 * scl, 0.10 * scl, 14, mat.bonnet, person, 0, 1.58 * scl, 0);
+      cyl(0.20 * scl, 0.20 * scl, 0.02 * scl, 16, mat.bonnet, person, 0, 1.53 * scl, 0);
+      cyl(0.165 * scl, 0.165 * scl, 0.025 * scl, 14, mat.dressRed, person, 0, 1.58 * scl, 0);
+    }
+  }
+  return person;
+}
+
+// === Gold sack ===
+function makeGoldSack(parent, x, y, z, opts = {}) {
+  const r = opts.rng || Math.random;
+  const sackM = r() < 0.5 ? mat.sack : mat.sackLight;
+  const g = new THREE.Group();
+  g.position.set(x, y, z);
+  g.rotation.y = (opts.rotY !== undefined) ? opts.rotY : (r() - 0.5) * 0.6;
+  g.rotation.z = (r() - 0.5) * 0.15;
+  parent.add(g);
+  const body = new THREE.Mesh(new THREE.SphereGeometry(0.30, 10, 8), sackM);
+  body.scale.set(1.0, 0.75, 1.0);
+  body.position.y = 0.20;
+  body.castShadow = true;
+  g.add(body);
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.18, 0.18, 8), sackM);
+  neck.position.y = 0.50;
+  g.add(neck);
+  const rope = new THREE.Mesh(new THREE.TorusGeometry(0.14, 0.025, 6, 12), mat.rope);
+  rope.rotation.x = Math.PI / 2;
+  rope.position.y = 0.48;
+  g.add(rope);
+  const coinCount = 5 + Math.floor(r() * 4);
+  for (let i = 0; i < coinCount; i++) {
+    const ang = (i / coinCount) * Math.PI * 2;
+    const coin = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.018, 10), mat.coin);
+    coin.position.set(Math.cos(ang) * 0.13, 0.60 + r() * 0.05, Math.sin(ang) * 0.13);
+    coin.rotation.y = ang;
+    g.add(coin);
+  }
+  for (let i = 0; i < 3; i++) {
+    const nug = new THREE.Mesh(new THREE.DodecahedronGeometry(0.07, 0), mat.gold);
+    nug.position.set((r()-0.5)*0.18, 0.56 + r()*0.06, (r()-0.5)*0.18);
+    nug.rotation.set(r()*Math.PI, r()*Math.PI, r()*Math.PI);
+    g.add(nug);
+  }
+  return g;
+}
+
+// === Briefcase with documents ===
+function makeBriefcase(parent, x, y, z, opts = {}) {
+  const r = opts.rng || Math.random;
+  const g = new THREE.Group();
+  g.position.set(x, y, z);
+  g.rotation.y = opts.rotY || 0;
+  g.rotation.z = opts.rotZ || 0;
+  parent.add(g);
+  box(0.5, 0.32, 0.18, mat.briefcase, g, 0, 0, 0);
+  box(0.48, 0.01, 0.19, mat.briefcaseDark, g, 0, 0.16, 0);
+  const handle = new THREE.Mesh(new THREE.TorusGeometry(0.10, 0.012, 6, 12, Math.PI), mat.briefcaseMetal);
+  handle.rotation.x = Math.PI / 2;
+  handle.position.y = 0.22;
+  g.add(handle);
+  for (const lx of [-0.16, 0.16]) box(0.04, 0.05, 0.04, mat.briefcaseMetal, g, lx, 0.10, 0.10);
+  box(0.06, 0.04, 0.025, mat.briefcaseMetal, g, 0, 0.06, 0.10);
+  for (let i = 0; i < 3; i++) {
+    const doc = box(0.30 - i*0.04, 0.005, 0.20, mat.paper, g, 0, 0.18 + i*0.008, 0.02);
+    doc.rotation.x = -0.08 - i * 0.04;
+    doc.rotation.z = (r() - 0.5) * 0.1;
+  }
+  return g;
+}
+
+// === Game-style figure (bandit/sheriff, simpler) ===
+// Map of last known positions by character/isSheriff, so a fresh figure picks up where the
+// previous one left off — this makes movement driven by game state glide smoothly.
+const lastFigurePos = new Map();
+function figureKey(character, isSheriff) {
+  return isSheriff ? 'sheriff' : character;
+}
+function makeGameFigure(parent, x, y, z, character, isSheriff=false) {
+  const color = isSheriff ? new THREE.MeshStandardMaterial({ color: 0xfbc02d, roughness: 0.5, metalness: 0.4 }) : characterColor(character);
+  const g = new THREE.Group();
+  g.scale.set(1.2, 1.2, 1.2);
+  // Pick up the previous position (if any) so animation has somewhere to glide FROM.
+  const key = figureKey(character, isSheriff);
+  const prev = lastFigurePos.get(key);
+  const startX = prev ? prev.x : x;
+  const startY = prev ? prev.y : y;
+  const startZ = prev ? prev.z : z;
+  g.position.set(startX, startY, startZ);
+  // Remember the *target* — animate() lerps current position toward this.
+  g.userData.targetPos = new THREE.Vector3(x, y, z);
+  g.userData.startPos = new THREE.Vector3(startX, startY, startZ);
+  g.userData.animTime = (prev && (prev.x !== x || prev.y !== y || prev.z !== z)) ? 0 : 999;
+  g.userData.animDuration = 0.5;    // glide length (seconds)
+  g.userData.matchKey = key;
+  parent.add(g);
+  for (const lz of [-0.06, 0.06]) cyl(0.05, 0.05, 0.32, 8, mat.iron, g, 0, 0.16, lz);
+  for (const lz of [-0.06, 0.06]) box(0.08, 0.06, 0.12, mat.iron, g, 0.04, 0.03, lz);
+  cyl(0.14, 0.12, 0.40, 12, color, g, 0, 0.50, 0);
+  if (isSheriff) {
+    const star = new THREE.Mesh(new THREE.CircleGeometry(0.06, 5), mat.briefcaseMetal);
+    star.position.set(0, 0.55, 0.14);
+    g.add(star);
+    cyl(0.12, 0.12, 0.06, 10, color, g, 0, 0.74, 0);
+  } else {
+    const belt = new THREE.Mesh(new THREE.TorusGeometry(0.13, 0.015, 6, 16), mat.iron);
+    belt.rotation.x = Math.PI / 2;
+    belt.position.y = 0.42;
+    g.add(belt);
+    box(0.05, 0.05, 0.02, mat.briefcaseMetal, g, 0, 0.42, 0.13);
+  }
+  for (const az of [-0.16, 0.16]) cyl(0.04, 0.04, 0.32, 8, color, g, 0, 0.48, az);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.10, 12, 10), mat.skin);
+  head.position.set(0, 0.78, 0);
+  head.castShadow = true;
+  g.add(head);
+  if (isSheriff) {
+    cyl(0.16, 0.16, 0.02, 16, color, g, 0, 0.85, 0);
+    cyl(0.08, 0.08, 0.12, 12, color, g, 0, 0.92, 0);
+    cyl(0.085, 0.085, 0.025, 12, mat.briefcaseDark, g, 0, 0.86, 0);
+  } else {
+    cyl(0.13, 0.13, 0.025, 16, color, g, 0, 0.85, 0);
+    cyl(0.07, 0.07, 0.10, 12, color, g, 0, 0.93, 0);
+    cyl(0.075, 0.075, 0.025, 12, mat.briefcase, g, 0, 0.86, 0);
+  }
+  return g;
+}
+
+// === Game-style loot (compact) ===
+function makeGameLoot(parent, x, y, z, type) {
+  const g = new THREE.Group();
+  g.position.set(x, y, z);
+  g.scale.set(1.2, 1.2, 1.2);
+  parent.add(g);
+  if (type === 'CASE') {
+    box(0.32, 0.22, 0.14, mat.briefcase, g, 0, 0, 0);
+    box(0.30, 0.01, 0.13, mat.briefcaseDark, g, 0, 0.11, 0);
+    const handle = new THREE.Mesh(new THREE.TorusGeometry(0.06, 0.008, 6, 12, Math.PI), mat.briefcaseMetal);
+    handle.rotation.x = Math.PI / 2;
+    handle.position.y = 0.16;
+    g.add(handle);
+  } else if (type === 'GEM') {
+    const oct = new THREE.Mesh(new THREE.OctahedronGeometry(0.10, 0), mat.gem);
+    g.add(oct);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.10, 0.012, 6, 12), mat.briefcaseMetal);
+    ring.rotation.x = Math.PI / 2;
+    ring.position.y = -0.07;
+    g.add(ring);
+  } else {
+    const pouch = new THREE.Mesh(new THREE.SphereGeometry(0.10, 10, 8), mat.pouch);
+    pouch.scale.set(1.0, 0.8, 1.0);
+    g.add(pouch);
+    const tie = cyl(0.025, 0.025, 0.08, 6, mat.rope, g, 0, 0.12, 0);
+    const knot = new THREE.Mesh(new THREE.SphereGeometry(0.03, 8, 6), mat.rope);
+    knot.position.y = 0.16;
+    g.add(knot);
+  }
+  return g;
+}
+
+// === Locomotive (open cab, engineer, briefcase) ===
+function buildLocomotive() {
+  const loco = new THREE.Group();
+  box(0.6, 0.15, 2.6, mat.locoAccent, loco, 0, 0.5, 0);
+
+  function makeWheel(r, isDriver=false) {
+    const g = new THREE.Group();
+    const tire = new THREE.Mesh(new THREE.CylinderGeometry(r, r, 0.12, 24), mat.wheel);
+    tire.rotation.x = Math.PI / 2; tire.castShadow = true;
+    g.add(tire);
+    const hub = new THREE.Mesh(new THREE.CylinderGeometry(r*0.4, r*0.4, 0.14, 12), mat.wheelHub);
+    hub.rotation.x = Math.PI / 2;
+    g.add(hub);
+    if (isDriver) {
+      for (let i = 0; i < 8; i++) {
+        const ang = (i / 8) * Math.PI * 2;
+        const spoke = new THREE.Mesh(new THREE.BoxGeometry(r*1.6, 0.05, 0.04), mat.wheelHub);
+        spoke.position.set(Math.cos(ang)*r*0.5, Math.sin(ang)*r*0.5, 0);
+        spoke.rotation.z = ang;
+        g.add(spoke);
+      }
+    }
+    return g;
+  }
+  const ponyL = makeWheel(0.30); ponyL.position.set(1.95, 0.30, -0.85); loco.add(ponyL);
+  const ponyR = makeWheel(0.30); ponyR.position.set(1.95, 0.30,  0.85); loco.add(ponyR);
+  for (const x of [1.1, 0.3, -0.5]) {
+    const wL = makeWheel(0.55, true); wL.position.set(x, 0.55, -0.85); loco.add(wL);
+    const wR = makeWheel(0.55, true); wR.position.set(x, 0.55,  0.85); loco.add(wR);
+  }
+  box(1.8, 0.08, 0.08, mat.rod, loco, 0.3, 0.55, -0.85);
+  box(1.8, 0.08, 0.08, mat.rod, loco, 0.3, 0.55, 0.85);
+  for (const z of [-0.95, 0.95]) {
+    box(0.6, 0.4, 0.35, mat.locoBody, loco, 1.85, 0.65, z);
+    cyl(0.05, 0.05, 0.6, 8, mat.brass, loco, 1.45, 0.65, z).rotation.z = Math.PI / 2;
+  }
+  const boiler = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 3.2, 24), mat.boiler);
+  boiler.rotation.z = Math.PI / 2;
+  boiler.position.set(0.2, 1.45, 0); loco.add(boiler);
+  for (const xb of [-1.2, -0.4, 0.4, 1.2]) {
+    const band = new THREE.Mesh(new THREE.TorusGeometry(0.56, 0.025, 8, 24), mat.boilerBand);
+    band.rotation.y = Math.PI / 2;
+    band.position.set(xb, 1.45, 0); loco.add(band);
+  }
+  const smokebox = new THREE.Mesh(new THREE.CylinderGeometry(0.58, 0.58, 0.5, 24), mat.boiler);
+  smokebox.rotation.z = Math.PI / 2;
+  smokebox.position.set(1.95, 1.45, 0); loco.add(smokebox);
+  const door = new THREE.Mesh(new THREE.CircleGeometry(0.58, 24), mat.boilerBand);
+  door.rotation.y = Math.PI / 2;
+  door.position.set(2.21, 1.45, 0); loco.add(door);
+  for (const yh of [-0.3, 0.3]) box(0.04, 0.06, 0.1, mat.brass, loco, 2.22, 1.45 + yh, 0);
+  cyl(0.12, 0.18, 0.7, 16, mat.boiler, loco, 1.65, 2.15, 0);
+  cyl(0.16, 0.13, 0.1, 16, mat.brass, loco, 1.65, 2.55, 0);
+  const dome = new THREE.Mesh(new THREE.SphereGeometry(0.22, 16, 12, 0, Math.PI*2, 0, Math.PI/2), mat.boiler);
+  dome.position.set(0.5, 1.95, 0); loco.add(dome);
+  cyl(0.22, 0.22, 0.1, 16, mat.brass, loco, 0.5, 1.95, 0);
+  cyl(0.04, 0.04, 0.25, 8, mat.brass, loco, 0.7, 2.05, -0.15);
+  box(0.1, 0.1, 0.3, mat.brass, loco, 2.2, 1.45, 0);
+  const lamp = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.15, 16), mat.brass);
+  lamp.rotation.z = Math.PI / 2;
+  lamp.position.set(2.32, 1.65, 0); loco.add(lamp);
+  const lampLens = new THREE.Mesh(new THREE.CircleGeometry(0.16, 16), new THREE.MeshStandardMaterial({ color: 0xfff0a0, emissive: 0xffd060, emissiveIntensity: 0.6 }));
+  lampLens.rotation.y = Math.PI / 2;
+  lampLens.position.set(2.40, 1.65, 0); loco.add(lampLens);
+  for (const z of [-1.05, 1.05]) box(3.4, 0.05, 0.25, mat.locoAccent, loco, 0.4, 1.0, z);
+  for (const z of [-0.6, 0.6]) {
+    const r = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 3.0, 6), mat.brass);
+    r.rotation.z = Math.PI / 2;
+    r.position.set(0.3, 1.95, z); loco.add(r);
+  }
+  // Cab — extended length to fit sheriff + 2 briefcases. Floor only (no walls).
+  box(cabLen, 0.1, 2.2, mat.wood, loco, cabCx, 0.85, 0);
+  // Cab — corner posts and arched roof.
+  for (const ex of [cabCx - cabLen/2 + 0.15, cabCx + cabLen/2 - 0.15]) {
+    for (const ez of [-1.05, 1.05]) {
+      box(0.10, cabCornerH, 0.10, mat.locoBody, loco, ex, 0.90 + cabCornerH/2 + 0.04, ez);
+    }
+  }
+  const cabRoof = new THREE.Mesh(
+    new THREE.CylinderGeometry(1.15, 1.15, cabLen + 0.1, 18, 1, false, Math.PI, Math.PI),
+    new THREE.MeshStandardMaterial({ color: 0x1f3a25, roughness: 0.6, transparent: true, opacity: 0.25 })
+  );
+  cabRoof.rotation.z = Math.PI / 2;
+  cabRoof.rotation.y = Math.PI / 2;
+  cabRoof.position.set(cabCx, 0.90 + cabCornerH + 0.10, 0);
+  cabRoof.castShadow = false;
+  loco.add(cabRoof);
+  // Roof eaves (front and back trim).
+  box(cabLen + 0.1, 0.04, 2.25, mat.locoBody, loco, cabCx, 0.90 + cabCornerH + 0.08, 0);
+  // Small chimney vent on roof.
+  const roofVent = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, 0.12, 8), mat.brass);
+  roofVent.position.set(cabCx - 0.8, 0.90 + cabCornerH + 0.25, 0);
+  loco.add(roofVent);
+  box(2.0, 0.08, 2.6, mat.locoAccent, loco, 0, 0.9, 0);
+  // Controls (shifted into new cab area).
+  const lever = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 1.0, 8), mat.brass);
+  lever.position.set(cabCx + 1.1, 1.35, -0.6); lever.rotation.x = -0.4; loco.add(lever);
+  const leverBall = new THREE.Mesh(new THREE.SphereGeometry(0.07, 12, 8), mat.brass);
+  leverBall.position.set(cabCx + 0.75, 1.55, -0.7); loco.add(leverBall);
+  const regRod = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.7, 8), mat.brass);
+  regRod.rotation.x = Math.PI / 2; regRod.position.set(cabCx + 0.8, 1.5, 0.6); loco.add(regRod);
+  const brake = new THREE.Mesh(new THREE.TorusGeometry(0.18, 0.025, 8, 16), mat.brass);
+  brake.position.set(cabCx + 0.6, 1.7, 0); loco.add(brake);
+  const brakeHub = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.15, 8), mat.brass);
+  brakeHub.rotation.z = Math.PI / 2; brakeHub.position.set(cabCx + 0.6, 1.7, 0); loco.add(brakeHub);
+  for (let i = 0; i < 6; i++) {
+    const ang = (i / 6) * Math.PI * 2;
+    const sp = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.36, 6), mat.brass);
+    sp.rotation.z = Math.PI / 2;
+    sp.position.set(-1.7, 1.7 + Math.cos(ang)*0.18, Math.sin(ang)*0.18);
+    loco.add(sp);
+  }
+  const gauge = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.18, 8), mat.glass);
+  gauge.position.set(-1.2, 1.85, 0.55); loco.add(gauge);
+  for (const xv of [0.2, 0.8]) {
+    const v = new THREE.Mesh(new THREE.SphereGeometry(0.04, 8, 6), mat.brass);
+    v.position.set(xv, 1.55, 0.55); loco.add(v);
+  }
+  for (const z of [-0.8, 0.8]) {
+    const buf = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.25, 12), mat.wood);
+    buf.rotation.z = Math.PI / 2; buf.position.set(2.35, 0.65, z); loco.add(buf);
+  }
+  return loco;
+}
+
+// === Engineer (default design) ===
+function addEngineer(loco) {
+  const eg = new THREE.Group();
+  eg.position.set(cabCx + 0.8, 0.95, 0); loco.add(eg);
+  for (const lz of [-0.10, 0.10]) cyl(0.07, 0.07, 0.55, 8, mat.uniformPant, eg, 0, 0.30, lz);
+  for (const lz of [-0.10, 0.10]) box(0.10, 0.08, 0.16, mat.briefcaseDark, eg, 0.06, 0.04, lz);
+  cyl(0.20, 0.16, 0.55, 12, mat.uniformCoat, eg, 0, 0.85, 0);
+  for (let i = 0; i < 4; i++) {
+    for (const bx of [-0.05, 0.05]) {
+      const btn = new THREE.Mesh(new THREE.SphereGeometry(0.018, 6, 6), mat.briefcaseMetal);
+      btn.position.set(bx, 0.65 + i * 0.10, 0.18);
+      eg.add(btn);
+    }
+  }
+  cyl(0.15, 0.15, 0.08, 10, mat.uniformCoat, eg, 0, 1.16, 0);
+  cyl(0.08, 0.08, 0.06, 8, mat.skin, eg, 0, 1.22, 0);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.14, 12, 10), mat.skin);
+  head.position.set(0, 1.35, 0); head.castShadow = true; eg.add(head);
+  const hair = new THREE.Mesh(new THREE.SphereGeometry(0.145, 12, 10, 0, Math.PI*2, 0, Math.PI*0.55), mat.hairBrown);
+  hair.position.set(0, 1.36, -0.01); eg.add(hair);
+  cyl(0.14, 0.14, 0.10, 14, mat.cap, eg, 0, 1.48, 0);
+  cyl(0.18, 0.18, 0.015, 18, mat.cap, eg, 0, 1.42, 0);
+  cyl(0.145, 0.145, 0.025, 14, mat.capBand, eg, 0, 1.46, 0);
+  const badge = new THREE.Mesh(new THREE.CircleGeometry(0.04, 8), mat.briefcaseMetal);
+  badge.position.set(0, 1.46, 0.145); eg.add(badge);
+  box(0.20, 0.015, 0.10, mat.cap, eg, 0.05, 1.42, 0.05);
+  const stache = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.025, 0.04), mat.hairBrown);
+  stache.position.set(0, 1.31, 0.13); eg.add(stache);
+  const rArm = cyl(0.06, 0.06, 0.50, 8, mat.uniformCoat, eg, 0.30, 0.92, 0);
+  rArm.rotation.z = -0.6; rArm.rotation.x = -0.2;
+  const rHand = new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 8), mat.skin);
+  rHand.position.set(0.50, 1.10, 0); eg.add(rHand);
+  const lArm = cyl(0.06, 0.06, 0.45, 8, mat.uniformCoat, eg, -0.25, 0.85, 0);
+  lArm.rotation.z = 0.3; lArm.rotation.x = 0.4;
+  const lHand = new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 8), mat.skin);
+  lHand.position.set(-0.40, 0.55, 0); eg.add(lHand);
+}
+
+// === Tender ===
+function buildTender() {
+  const t = new THREE.Group();
+  for (const x of [0.7, -0.7]) {
+    for (const z of [-0.85, 0.85]) {
+      const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.30, 0.30, 0.10, 16), mat.wheel);
+      wheel.rotation.x = Math.PI / 2; wheel.position.set(x, 0.30, z);
+      wheel.castShadow = true; t.add(wheel);
+      const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.10, 0.12, 12), mat.wheelHub);
+      hub.rotation.x = Math.PI / 2; hub.position.set(x, 0.30, z);
+      t.add(hub);
+    }
+  }
+  box(2.4, 0.15, 2.0, mat.locoAccent, t, 0, 0.5, 0);
+  box(2.4, 0.6, 0.08, mat.locoBody, t, 0, 1.05, -0.95);
+  box(2.4, 0.6, 0.08, mat.locoBody, t, 0, 1.05,  0.95);
+  box(0.08, 0.6, 2.0, mat.locoBody, t,  1.16, 1.05, 0);
+  box(0.08, 0.6, 2.0, mat.locoBody, t, -1.16, 1.05, 0);
+  const coalGroup = new THREE.Group();
+  for (let i = 0; i < 12; i++) {
+    const c = new THREE.Mesh(new THREE.DodecahedronGeometry(0.07 + Math.random()*0.04, 0), mat.coal || new THREE.MeshStandardMaterial({ color: 0x0a0a0a, roughness: 0.95 }));
+    c.position.set((Math.random()-0.5)*2.0, 1.25 + Math.random()*0.10, (Math.random()-0.5)*1.6);
+    coalGroup.add(c);
+  }
+  t.add(coalGroup);
+  box(0.15, 0.1, 0.3, mat.locoAccent, t, 1.3, 0.7, 0);
+  return t;
+}
+
+// === Open wagon ===
+function buildOpenWagon(paint) {
+  const w = new THREE.Group();
+  for (const x of [0.8, -0.8]) {
+    for (const z of [-0.85, 0.85]) {
+      const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.30, 0.30, 0.10, 16), mat.wheel);
+      wheel.rotation.x = Math.PI / 2; wheel.position.set(x, 0.30, z);
+      wheel.castShadow = true; w.add(wheel);
+      const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.10, 0.12, 12), mat.wheelHub);
+      hub.rotation.x = Math.PI / 2; hub.position.set(x, 0.30, z);
+      w.add(hub);
+    }
+  }
+  box(2.8, 0.18, 2.0, mat.iron, w, 0, 0.55, 0);
+  box(2.7, 0.05, 1.9, paint, w, 0, 0.66, 0);
+  // Low rim around the platform (just for visual edge — not real walls).
+  const rimH = 0.12;
+  for (const z of [-0.97, 0.97]) {
+    box(2.7, rimH, 0.06, paint, w, 0, 0.55 + rimH/2 + 0.04, z);
+    box(2.7, 0.04, 0.10, mat.trimGold, w, 0, 0.55 + rimH + 0.05, z);
+  }
+  for (const ex of [-1.35, 1.35]) box(0.06, rimH + 0.04, 1.9, paint, w, ex, 0.55 + (rimH+0.04)/2, 0);
+  // Roof only (no walls) — barrel / arched half-cylinder along wagon length, held by corner posts.
+  const cornerH = 1.85;
+  for (const ex of [-1.35, 1.35]) {
+    for (const ez of [-0.95, 0.95]) {
+      box(0.10, cornerH, 0.10, mat.iron, w, ex, 0.55 + cornerH/2 + 0.04, ez);
+    }
+  }
+  // Cross beams (low, just for visual frame).
+  for (const ex of [-1.30, 1.30]) {
+    box(0.08, 0.06, 1.85, mat.iron, w, ex, 0.55 + cornerH + 0.05, 0);
+  }
+  // Roof (barrel / arched) — solid.
+  const roof = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.97, 0.97, 2.75, 18, 1, false, 0, Math.PI),
+    new THREE.MeshStandardMaterial({ color: 0x2a2018, roughness: 0.7 })
+  );
+  roof.rotation.z = Math.PI / 2;
+  roof.position.set(0, 0.55 + cornerH + 0.10, 0);
+  roof.castShadow = true;
+  w.add(roof);
+  // Roof eaves (front/back trim).
+  for (const ex of [-1.39, 1.39]) {
+    const eave = new THREE.Mesh(
+      new THREE.CylinderGeometry(1.02, 1.02, 0.05, 18, 1, false, 0, Math.PI),
+      mat.trimGold
+    );
+    eave.rotation.z = Math.PI / 2;
+    eave.position.set(ex, 0.55 + cornerH + 0.10, 0);
+    w.add(eave);
+  }
+  for (const ex of [halfL(1.4), halfL(-1.4)]) {
+    for (const ez of [-0.9, 0.9]) {
+      const buf = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.18, 12), mat.wood);
+      buf.rotation.z = Math.PI / 2; buf.position.set(ex, 0.65, ez); w.add(buf);
+    }
+  }
+  box(0.15, 0.1, 0.2, mat.iron, w, 1.55, 0.7, 0);
+  return w;
+}
+function halfL(v) { return v; }
+
+// === Default setup (per Colt Express rules, 5 players) ===
+// Total: 18 POUCH + 6 GEM + 2 CASE = 26 loot tokens.
+// Everything shifted -3 from the original distribution so the sheriff lands in the locomotive (car 0).
+const DEFAULT_LOOT_DISTRIBUTION = [
+  ['GEM', 'POUCH', 'POUCH', 'POUCH'],  // car 0 (locomotive)
+  ['GEM', 'POUCH', 'POUCH', 'POUCH'],  // car 1
+  ['CASE', 'POUCH', 'POUCH', 'POUCH'],  // car 2
+  ['GEM', 'GEM', 'POUCH', 'POUCH', 'POUCH'],  // car 3
+  ['POUCH', 'POUCH', 'POUCH', 'POUCH'],  // car 4
+  ['GEM', 'POUCH', 'POUCH', 'POUCH'],  // car 5
+  ['GEM', 'POUCH', 'POUCH', 'POUCH'],  // car 6
+];
+// Bandit placement: 6 players occupy the last two wagons (5 & 6).
+const DEFAULT_BANDITS = [
+  // [character, carIndex]
+  ['Ghost',    6],
+  ['Belle',    5],
+  ['Doc',      6],
+  ['Tuco',     5],
+  ['Django',   6],
+  ['Cheyenne', 5],
+];
+const DEFAULT_SHERIFF_CAR = 0; // sheriff in the locomotive (car 0)
+
+// === Train group (rebuilt on state change) ===
+const train = new THREE.Group();
+scene.add(train);
+let dynamicGroup = null;
+let smokeSprite = null;
+let smokeT = 0;
+
+function clearTrain() {
+  // Snapshot current figure positions so the next rebuild's figures can glide from here.
+  const savePositions = (group) => {
+    if (!group) return;
+    group.children.forEach(fig => {
+      if (fig.userData && fig.userData.matchKey) {
+        lastFigurePos.set(fig.userData.matchKey, {
+          x: fig.position.x,
+          y: fig.position.y,
+          z: fig.position.z,
+        });
+      }
+    });
+  };
+  savePositions(train);
+  savePositions(dynamicGroup);
+  while (train.children.length > 0) train.remove(train.children[0]);
+  if (dynamicGroup) { scene.remove(dynamicGroup); dynamicGroup = null; }
+}
+
+function rebuild() {
+  clearTrain();
+  // Compute the train centre in loco-local space and place the train group so its centre
+  // sits at the world origin (0, 0, 0). This makes the world-space centre = 0, regardless
+  // of how far the cab extends to the left.
+  const wagonCount = STATE_MODE && STATE_DATA
+    ? STATE_DATA.cars.filter(c => c.index !== 0).length
+    : DEFAULT_LOOT_DISTRIBUTION.length;
+  const trainCenterLocal = (trainLeftEdge() + trainRightEdge(wagonCount)) / 2;
+  train.position.x = -trainCenterLocal;
+  train.position.z = 0;
+  const loco = buildLocomotive();
+  train.add(loco);
+  addEngineer(loco);
+  // Two briefcases with documents in the extended cab.
+  makeBriefcase(train, cabCx - 0.8, 0.95, 0.75, { rotY: 0.1 });
+  makeBriefcase(train, cabCx - 0.8, 0.95, -0.55, { rotY: -0.4 });
+  for (let i = 0; i < 4; i++) {
+    const paper = box(0.18, 0.003, 0.24, mat.paper, train, cabCx - 1.0 + i*0.05, 0.91, -0.25 + (i%2)*0.4);
+    paper.rotation.z = (Math.random() - 0.5) * 0.4;
+    paper.rotation.x = -0.1;
+  }
+
+  const liveries = [
+    new THREE.MeshStandardMaterial({ color: 0x8b2424, roughness: 0.6 }),
+    new THREE.MeshStandardMaterial({ color: 0x2a4a30, roughness: 0.6 }),
+    new THREE.MeshStandardMaterial({ color: 0x1f3a6a, roughness: 0.6 }),
+    new THREE.MeshStandardMaterial({ color: 0x6a4a30, roughness: 0.7 }),
+    new THREE.MeshStandardMaterial({ color: 0xe8d8a8, roughness: 0.6 }),
+    new THREE.MeshStandardMaterial({ color: 0xc89030, roughness: 0.6 }),
+  ];
+
+  let xPos = WAGON_START_X;  // first wagon centre (wagons fan out to the left)
+  let livIdx = 0;
+
+  if (STATE_MODE && STATE_DATA) {
+    // Game state mode: one wagon per BoardCar (except index 0 = locomotive).
+    for (const car of STATE_DATA.cars) {
+      if (car.index === 0) continue;
+      const w = buildOpenWagon(liveries[livIdx++ % liveries.length]);
+      w.position.x = xPos;
+      xPos -= 3.4;
+      train.add(w);
+    }
+    dynamicGroup = new THREE.Group();
+    scene.add(dynamicGroup);
+    // Place game content (loot, players, sheriff).
+    let wagonIdx = 0;
+    for (const car of STATE_DATA.cars) {
+      if (car.index === 0) continue;
+      placeGameContent(car, xPosForWagon(wagonIdx), wagonIdx);
+      wagonIdx++;
+    }
+    // Locomotive cab — sheriff goes here if sheriffCar == 0.
+    if (STATE_DATA.sheriffCar === 0) {
+      if (STATE_DATA.sheriffOnRoof) {
+        // On top of the cab roof — add to train group so it bobs with the locomotive.
+        makeGameFigure(train, cabCx, 0.90 + cabCornerH + 0.30, 0, 'Ghost', true);
+      } else {
+        makeGameFigure(train, cabCx + 0.2, 0.88, 0, 'Ghost', true);
+      }
+    }
+  } else {
+    // Default design: per Colt Express rules (5 players, 4 wagons + loco, no tender).
+    const wagonCount = DEFAULT_LOOT_DISTRIBUTION.length;
+    for (let i = 0; i < wagonCount; i++) {
+      const w = buildOpenWagon(liveries[i % liveries.length]);
+      w.position.x = xPos;
+      xPos -= 3.4;
+      train.add(w);
+    }
+    dynamicGroup = new THREE.Group();
+    scene.add(dynamicGroup);
+    // Loot per car.
+    for (let i = 0; i < DEFAULT_LOOT_DISTRIBUTION.length; i++) {
+      placeDefaultContent(i);
+    }
+    // Bandits per car (inside, not on roof).
+    for (const [character, carIndex] of DEFAULT_BANDITS) {
+      const xC = xPosForWagon(carIndex - 1);
+      const floorY = 0.74;
+      const car = { lootInside: DEFAULT_LOOT_DISTRIBUTION[carIndex] || [] };
+      placeBanditsInCar(car, xC, floorY, [character]);
+    }
+    // Sheriff in DEFAULT_SHERIFF_CAR.
+    if (DEFAULT_SHERIFF_CAR === 0) {
+      // Sheriff in the locomotive cab (added to train so it moves with the loco).
+      makeGameFigure(train, cabCx + 0.2, 0.88, 0, 'Ghost', true);
+    } else {
+      const xC = xPosForWagon(DEFAULT_SHERIFF_CAR - 1);
+      makeGameFigure(dynamicGroup, xC, 0.74, 0, 'Ghost', true);
+    }
+  }
+
+  // (train.position.x already set at the top so world-space coords match wagon positions.)
+}
+
+function xPosForWagon(idx) {
+  // World-space coordinate of wagon idx. Wagons start at x=train.position.x - 3.4.
+  return train.position.x + WAGON_START_X - idx * WAGON_SPACING;
+}
+// Wagon centre spacing (first wagon centre at WAGON_START_X; wagons fan out to the LEFT).
+const WAGON_SPACING = 3.4;
+const WAGON_HALF = 1.375;            // wagonLen 2.75 / 2
+const WAGON_START_X = -4.0;          // centre of wagon #1 — just past the cab (back of cab = -3.9; front of wagon = -4.125)
+// Train horizontal bounds in loco-local space.
+function trainLeftEdge() { return cabCx - cabLen / 2; }
+function trainRightEdge(wagonCount) {
+  // Last wagon centre = WAGON_START_X - (wagonCount-1) * spacing; right edge = centre + WAGON_HALF.
+  return WAGON_START_X - (wagonCount - 1) * WAGON_SPACING + WAGON_HALF;
+}
+function totalTrainWidth() {
+  const wagonCount = STATE_MODE && STATE_DATA
+    ? STATE_DATA.cars.filter(c => c.index !== 0).length
+    : DEFAULT_LOOT_DISTRIBUTION.length;
+  return trainRightEdge(wagonCount) - trainLeftEdge();
+}
+// Train centre in world space (mid of loco + wagons).
+function getTrainCenter() {
+  const wagonCount = STATE_MODE && STATE_DATA
+    ? STATE_DATA.cars.filter(c => c.index !== 0).length
+    : DEFAULT_LOOT_DISTRIBUTION.length;
+  return train.position.x + (trainLeftEdge() + trainRightEdge(wagonCount)) / 2;
+}
+
+function placeDefaultContent(wagonIdx) {
+  const L = 2.8;
+  const W = 2.0;
+  const halfL = L / 2;
+  const halfW = W / 2;
+  const x = xPosForWagon(wagonIdx - 1);
+  const floorY = 0.74;
+  const loot = DEFAULT_LOOT_DISTRIBUTION[wagonIdx] || [];
+  if (loot.length === 0) return;
+  // Place loot in a row along the wagon floor.
+  const usableW = L - 0.4;
+  const spacing = usableW / loot.length;
+  for (let i = 0; i < loot.length; i++) {
+    const lx = -usableW/2 + spacing * (i + 0.5);
+    makeGameLoot(dynamicGroup, x + lx, floorY, 0, loot[i]);
+  }
+}
+
+// Place bandits inside a car (for default design). Avoids overlap with existing loot.
+function placeBanditsInCar(car, xCenter, floorY, characters) {
+  const L = 2.8;
+  const halfL = L / 2;
+  const lootCount = (car.lootInside || []).length;
+  // Squeeze bandits behind the loot at the back.
+  const usableW = 1.2;
+  const spacing = characters.length > 0 ? usableW / characters.length : 0;
+  for (let i = 0; i < characters.length; i++) {
+    const lx = -usableW/2 + spacing * (i + 0.5);
+    makeGameFigure(dynamicGroup, xCenter + lx, floorY, -0.35, characters[i], false);
+  }
+}
+
+function placeGameContent(car, xCenter, wagonIdx) {
+  const L = 2.8;
+  const W = 2.0;
+  const halfL = L / 2;
+  const halfW = W / 2;
+  const floorY = 0.74;
+  // Top of the arched roof is at floor + cornerH (1.85) + radius (0.97) ≈ 3.47.
+  // Place roof content slightly above that.
+  const roofY = 3.55;
+  const r = rng(50 + wagonIdx * 7);
+  const insideLoot = car.lootInside || [];
+  const insidePlayers = car.inside || [];
+  const roofLoot = car.lootRoof || [];
+  const roofPlayers = car.roof || [];
+  console.log(`[3D] car ${car.index}: insideLoot=${insideLoot.length}, insidePlayers=${insidePlayers.length}, roofLoot=${roofLoot.length}, roofPlayers=${roofPlayers.length}`);
+  // Interior.
+  const insideItems = insideLoot.length + insidePlayers.length;
+  if (insideItems > 0) {
+    const usableW = 1.5;
+    const spacing = usableW / insideItems;
+    for (let i = 0; i < insideLoot.length; i++) {
+      const x = -usableW/2 + spacing * (i + 0.5);
+      makeGameLoot(dynamicGroup, xCenter + x, floorY, 0, insideLoot[i]);
+    }
+    for (let i = 0; i < insidePlayers.length; i++) {
+      const pid = insidePlayers[i];
+      const player = STATE_DATA.players.find(p => p.id === pid);
+      if (!player) { console.warn(`[3D] player ${pid} not found in STATE_DATA.players`); continue; }
+      const x = -usableW/2 + spacing * (insideLoot.length + i + 0.5);
+      makeGameFigure(dynamicGroup, xCenter + x, floorY, 0, player.character, false);
+    }
+  }
+  // Roof.
+  const roofItems = roofLoot.length + roofPlayers.length;
+  if (roofItems > 0) {
+    const usableW = 1.6;
+    const spacing = usableW / roofItems;
+    for (let i = 0; i < roofLoot.length; i++) {
+      const x = -usableW/2 + spacing * (i + 0.5);
+      makeGameLoot(dynamicGroup, xCenter + x, roofY - 0.05, 0, roofLoot[i]);
+    }
+    for (let i = 0; i < roofPlayers.length; i++) {
+      const pid = roofPlayers[i];
+      const player = STATE_DATA.players.find(p => p.id === pid);
+      if (!player) { console.warn(`[3D] roof player ${pid} not found in STATE_DATA.players`); continue; }
+      const x = -usableW/2 + spacing * (roofLoot.length + i + 0.5);
+      makeGameFigure(dynamicGroup, xCenter + x, roofY, 0, player.character, false);
+    }
+  }
+  // Sheriff in this wagon (inside or on roof).
+  if (STATE_DATA.sheriffCar === car.index) {
+    if (STATE_DATA.sheriffOnRoof) {
+      // Above the top of the arched roof.
+      makeGameFigure(dynamicGroup, xCenter, roofY + 0.05, 0, 'Ghost', true);
+    } else {
+      makeGameFigure(dynamicGroup, xCenter, floorY, -0.4, 'Ghost', true);
+    }
+  }
+}
+
+// === Smoke ===
+function makeSmokeTex() {
+  const c = document.createElement('canvas'); c.width = 64; c.height = 64;
+  const ctx = c.getContext('2d');
+  const grd = ctx.createRadialGradient(32, 32, 4, 32, 32, 32);
+  grd.addColorStop(0, 'rgba(255,255,255,0.9)');
+  grd.addColorStop(0.5, 'rgba(220,220,220,0.5)');
+  grd.addColorStop(1, 'rgba(200,200,200,0)');
+  ctx.fillStyle = grd; ctx.fillRect(0, 0, 64, 64);
+  return new THREE.CanvasTexture(c);
+}
+const smokeTex = makeSmokeTex();
+const smokeParticles = [];
+for (let i = 0; i < 25; i++) {
+  const m = new THREE.SpriteMaterial({ map: smokeTex, color: 0xeeeeee, transparent: true, opacity: 0.7 });
+  const s = new THREE.Sprite(m);
+  s.scale.set(0.6, 0.6, 0.6);
+  s.visible = false;
+  scene.add(s);
+  smokeParticles.push({ sprite: s, life: 0, maxLife: 4 });
+}
+
+// === Resize & loop ===
+// (getTrainCenter is defined above near totalTrainWidth)
+
+const VIEWS = {
+  top:   { pos: [0, 42, 0.5],  target: [0, 1.5, 0] },
+  three: { pos: [22, 34, 22],  target: [0, 1.5, 0] },
+  side:  { pos: [28, 6, 28],   target: [0, 1.5, 0] },
+  close: { pos: [-6, 4, 6],    target: [-12, 1.0, 0] },
+  orbit: null,
+};
+
+// Compute the train's vertical centre so the camera target sits on the train, not on the rails.
+function getTrainYCenter() {
+  // Average of: floor (0.55) + half of (cabCornerH + roof top).
+  // Cab top ~0.90 + cabCornerH + 0.20 ≈ 2.80. Wagon roof top ~3.47. Avg ≈ 2.0.
+  return 2.0;
+}
+function setView(name) {
+  if (name === 'orbit') {
+    startOrbit();
+    return;
+  }
+  stopOrbit();
+  const v = VIEWS[name];
+  if (!v) return;
+  const cx = getTrainCenter();
+  // Lift the target to the train's vertical centre so the camera looks at the train,
+  // not at the ground / rails.
+  const targetY = name === 'top' ? 0 : getTrainYCenter();
+  camera.position.set(v.pos[0] + cx, v.pos[1], v.pos[2]);
+  controls.target.set(v.target[0] + cx, targetY, v.target[2]);
+  controls.update();
+}
+
+// 360° horizontal orbit around the train.
+let orbitT = 0;
+let orbitActive = false;
+const ORBIT_RADIUS = 32;
+const ORBIT_HEIGHT = 10;
+const ORBIT_SPEED = 0.25; // radians per second
+function startOrbit() {
+  orbitActive = true;
+  orbitT = Math.atan2(camera.position.z, camera.position.x);
+  // Aim orbit at the train center (in world space) at the train's vertical centre.
+  const cx = getTrainCenter();
+  controls.target.set(cx, getTrainYCenter(), 0);
+  document.querySelectorAll('#views button[data-view]').forEach(x => x.classList.remove('active'));
+  const btn = document.querySelector('#views button[data-view="orbit"]');
+  if (btn) btn.classList.add('active');
+}
+function stopOrbit() {
+  orbitActive = false;
+  document.querySelectorAll('#views button[data-view]').forEach(x => {
+    if (x.dataset.view === 'orbit') x.classList.remove('active');
+  });
+}
+function updateOrbit(dt) {
+  if (!orbitActive) return;
+  orbitT += dt * ORBIT_SPEED;
+  const cx = controls.target.x;
+  const cz = controls.target.z;
+  camera.position.x = cx + Math.cos(orbitT) * ORBIT_RADIUS;
+  camera.position.z = cz + Math.sin(orbitT) * ORBIT_RADIUS;
+  camera.position.y = ORBIT_HEIGHT;
+  camera.lookAt(controls.target);
+}
+document.querySelectorAll('#views button[data-view]').forEach(b => {
+  b.addEventListener('click', () => {
+    if (b.dataset.view === 'orbit') {
+      if (orbitActive) {
+        stopOrbit();
+        // Restore last static view (top by default).
+        document.querySelectorAll('#views button[data-view]').forEach(x => x.classList.remove('active'));
+        const topBtn = document.querySelector('#views button[data-view="top"]');
+        if (topBtn) topBtn.classList.add('active');
+        setView('top');
+      } else {
+        document.querySelectorAll('#views button[data-view]').forEach(x => x.classList.remove('active'));
+        b.classList.add('active');
+        setView('orbit');
+      }
+      return;
+    }
+    stopOrbit();
+    document.querySelectorAll('#views button[data-view]').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+    setView(b.dataset.view);
+  });
+});
+
+// === Player-count scenario buttons ===
+// Per Colt Express rules:
+//   2 players -> 3 wagons + locomotive
+//   3 players -> 4 wagons + locomotive
+//   4-6 players -> 6 wagons + locomotive
+const CHARS = ['Ghost', 'Belle', 'Doc', 'Tuco', 'Django', 'Cheyenne'];
+function buildScenario(playerCount) {
+  const wagonCount = playerCount <= 2 ? 3 : (playerCount === 3 ? 4 : 6);
+  const players = [];
+  const bandits = []; // [{character, carIndex}]
+  // Players: odd -> last wagon (wagonCount), even -> second-to-last (wagonCount-1).
+  const playerBanditCounts = playerCount === 2 ? [2, 2] :
+                              playerCount === 3 ? [2, 2, 2] :
+                              [1, 1, 1, 1, 1, 1].slice(0, playerCount);
+  const wagonsForPlayer = [];
+  for (let p = 0; p < playerCount; p++) {
+    const num = playerBanditCounts[p];
+    const isOdd = (p + 1) % 2 === 1;
+    wagonsForPlayer.push([]);
+    if (num === 1) {
+      wagonsForPlayer[p].push(isOdd ? wagonCount : wagonCount - 1);
+    } else {
+      wagonsForPlayer[p].push(isOdd ? wagonCount : wagonCount - 1);
+      const alt = isOdd ? wagonCount - 1 : wagonCount - 2;
+      if (alt >= 1) wagonsForPlayer[p].push(alt);
+    }
+  }
+  const cars = [{ index: 0, inside: [], roof: [], lootInside: [], lootRoof: [] }];
+  for (let i = 1; i <= wagonCount; i++) {
+    cars.push({ index: i, inside: [], roof: [], lootInside: [], lootRoof: [] });
+  }
+  // Distribute loot (2 CASE + 6 GEM + 18 POUCH = 26) evenly across all wagons,
+  // so every wagon (red, green, blue, brown, cream, yellow) has loot.
+  const loot = ['CASE'];
+  for (let i = 0; i < 6; i++) loot.push('GEM');
+  for (let i = 0; i < 18; i++) loot.push('POUCH');
+  let seed = 42;
+  for (let i = loot.length - 1; i > 0; i--) {
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    const j = seed % (i + 1);
+    [loot[i], loot[j]] = [loot[j], loot[i]];
+  }
+  const base = Math.floor(loot.length / wagonCount);
+  let extra = loot.length - base * wagonCount;
+  let li = 0;
+  for (let i = 1; i <= wagonCount; i++) {
+    const perCar = base + (extra-- > 0 ? 1 : 0);
+    cars[i].lootInside = loot.slice(li, li + perCar);
+    li += perCar;
+  }
+  // Place bandits.
+  let charIdx = 0;
+  for (let p = 0; p < playerCount; p++) {
+    const char = CHARS[charIdx++ % CHARS.length];
+    players.push({ id: 'p' + p, nickname: char, character: char });
+    for (const w of wagonsForPlayer[p]) {
+      bandits.push({ char, carIndex: w });
+      cars[w].inside.push('p' + p);
+    }
+  }
+  return { cars, sheriffCar: 0, sheriffOnRoof: false, players, bandits };
+}
+
+function onResize() {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+}
+window.addEventListener('resize', onResize);
+
+const clock = new THREE.Clock();
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = clock.getDelta();
+  const t = clock.getElapsedTime();
+  smokeT += dt;
+  if (smokeT > 0.1) {
+    smokeT = 0;
+    const p = smokeParticles.find(pp => !pp.sprite.visible || pp.life > pp.maxLife);
+    if (p) {
+      p.life = 0;
+      p.maxLife = 3 + Math.random() * 2;
+      const locoX = train.position.x + 1.65;
+      p.sprite.position.set(locoX, 2.85, 0);
+      p.sprite.scale.set(0.4, 0.4, 0.4);
+      p.sprite.material.opacity = 0.7;
+      p.sprite.visible = true;
+      p.vx = (Math.random()-0.5) * 0.4;
+      p.vz = (Math.random()-0.5) * 0.4;
+      p.vy = 0.8 + Math.random()*0.4;
+    }
+  }
+  for (const p of smokeParticles) {
+    if (!p.sprite.visible) continue;
+    p.life += dt;
+    if (p.life > p.maxLife) { p.sprite.visible = false; continue; }
+    p.sprite.position.x += p.vx * dt;
+    p.sprite.position.y += p.vy * dt;
+    p.sprite.position.z += p.vz * dt;
+    const k = p.life / p.maxLife;
+    const s = 0.4 + k * 2.5;
+    p.sprite.scale.set(s, s, s);
+    p.sprite.material.opacity = 0.7 * (1 - k);
+  }
+  train.position.y = Math.sin(t * 1.5) * 0.02;
+  // Smoothly animate bandit/sheriff figures to their target positions (driven by game state).
+  // Animate figures in both dynamicGroup and train (for sheriff in locomotive, engineer).
+  [dynamicGroup, train].forEach(group => {
+    if (group) {
+      group.children.forEach(fig => {
+        const ud = fig.userData;
+        if (ud && ud.targetPos && ud.startPos) {
+          ud.animTime += dt;
+          const k = Math.min(1, ud.animTime / ud.animDuration);
+          // Ease-out cubic for a snappier glide.
+          const e = 1 - Math.pow(1 - k, 3);
+          fig.position.lerpVectors(ud.startPos, ud.targetPos, e);
+        }
+      });
+    }
+  });
+  updateOrbit(dt);
+  controls.update();
+  renderer.render(scene, camera);
+}
+
+rebuild();
+animate();
+</script>
+</body>
+</html>

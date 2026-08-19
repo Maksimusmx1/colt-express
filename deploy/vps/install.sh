@@ -39,7 +39,7 @@ sudo install -d "$SERVER_DIR" "$APK_DIR" "$WEB_DIR" "$LOG_DIR"
 sudo tar -xzf "$DEPLOY_DIR/colt-express-server.tar.gz" -C "$SERVER_DIR" --strip-components=1
 sudo install -m 644 "$DEPLOY_DIR/app-debug.apk" "$APK_DIR/app-debug.apk"
 if [ -d "$DEPLOY_DIR/web" ]; then
-  sudo cp -f "$DEPLOY_DIR/web/"* "$WEB_DIR/"
+  sudo cp -rf "$DEPLOY_DIR/web/"* "$WEB_DIR/"
 fi
 sudo install -m 644 "$DEPLOY_DIR/colt-express.service" "/etc/systemd/system/$SERVICE_NAME.service"
 
