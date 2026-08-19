@@ -753,18 +753,18 @@ function renderTrain(){
   }
   const frame=$('train3d-frame');
   if(!frame||!frame.contentWindow)return;
-  const players=(players||[]).map(p=>({id:p.id,nickname:p.nickname,character:p.character}));
   const payload={
     cars: board.cars.map((c,i)=>({index:i,inside:c.inside||[],roof:c.roof||[],lootInside:c.lootInside||[],lootRoof:c.lootRoof||[]})),
     sheriffCar: board.sheriffCar,
     sheriffOnRoof: !!board.sheriffOnRoof,
-    players,
+    players:(players||[]).map(p=>({id:p.id,nickname:p.nickname,character:p.character})),
     currentTurn: currentTurn,
     currentTurnMode: currentTurnMode,
     turnIndex: turnIndex,
   };
   frame.contentWindow.postMessage({type:'setState',payload},'*');
   console.log('[3D] sent state:', payload);
+  gameLog('3D setState sent: '+payload.cars.length+' cars, sheriff@'+payload.sheriffCar+' players='+payload.players.length);
 }
 
 function renderHand(){
