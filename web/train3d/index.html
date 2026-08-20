@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <title>3D поезд Colt Express</title>
 <style>
-  html, body { margin: 0; padding: 0; height: 100%; background: #0a0a0a; overflow: hidden; font-family: 'Segoe UI', sans-serif; color: #e0e0e0; }
+  html, body { margin: 0; padding: 0; height: 100%; background: #1a0a2e; overflow: hidden; font-family: 'Segoe UI', sans-serif; color: #e0e0e0; }
   #c { display: block; width: 100vw; height: 100vh; }
   #title { position: fixed; top: 6px; left: 8px; background: rgba(0,0,0,0.65); color: #d4a040; padding: 4px 10px; border-radius: 4px; font-size: 11px; letter-spacing: 1px; z-index: 10; pointer-events: none; }
   #status { position: fixed; top: 26px; left: 8px; background: rgba(0,0,0,0.65); color: #d4a040; padding: 4px 10px; border-radius: 4px; font-size: 11px; z-index: 10; pointer-events: none; font-family: monospace; }
@@ -24,9 +24,9 @@
 <div id="title">ПАРОВОЗ «ЭКСПРЕСС» · 1905 г.</div>
 <div id="status">ожидание state…</div>
 <div id="views">
-  <button data-view="top" class="active">Сверху</button>
+  <button data-view="top">Сверху</button>
   <button data-view="three">3/4</button>
-  <button data-view="side">Сбоку</button>
+  <button data-view="side" class="active">Сбоку</button>
   <button data-view="close">Кабина</button>
   <button data-view="orbit">Обзор 360°</button>
 </div>
@@ -103,28 +103,28 @@ renderer.toneMappingExposure = 1.0;
 const scene = new THREE.Scene();
 const skyGeo = new THREE.SphereGeometry(400, 32, 16);
 const skyMat = new THREE.ShaderMaterial({
-  uniforms: { topColor: { value: new THREE.Color(0x6b8caf) }, bottomColor: { value: new THREE.Color(0xe8c898) } },
+  uniforms: { topColor: { value: new THREE.Color(0x1a0a2e) }, midColor: { value: new THREE.Color(0xc85a28) }, bottomColor: { value: new THREE.Color(0xf0c060) } },
   vertexShader: `varying vec3 vWorldPosition; void main(){ vec4 wp = modelMatrix * vec4(position,1.0); vWorldPosition = wp.xyz; gl_Position = projectionMatrix * viewMatrix * wp; }`,
-  fragmentShader: `uniform vec3 topColor; uniform vec3 bottomColor; varying vec3 vWorldPosition; void main(){ float h = normalize(vWorldPosition).y; gl_FragColor = vec4(mix(bottomColor, topColor, max(h, 0.0)), 1.0); }`,
+  fragmentShader: `uniform vec3 topColor; uniform vec3 midColor; uniform vec3 bottomColor; varying vec3 vWorldPosition; void main(){ float h = normalize(vWorldPosition).y; vec3 col = h < 0.15 ? mix(bottomColor, midColor, h/0.15) : mix(midColor, topColor, (h-0.15)/0.85); gl_FragColor = vec4(col, 1.0); }`,
   side: THREE.BackSide, depthWrite: false
 });
 scene.add(new THREE.Mesh(skyGeo, skyMat));
-scene.fog = new THREE.Fog(0xc8b890, 80, 250);
+scene.fog = new THREE.Fog(0xf0c060, 60, 180);
 
 const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
-camera.position.set(0, 35, 35);
+camera.position.set(0, 5, 24);
 const controls = new OrbitControls(camera, canvas);
-controls.target.set(0, 1.0, 0);
+controls.target.set(0, 1.5, 0);
 controls.enableDamping = true;
 controls.dampingFactor = 0.08;
 controls.minDistance = 6;
 controls.maxDistance = 120;
 controls.maxPolarAngle = Math.PI * 0.49;
 
-const hemi = new THREE.HemisphereLight(0xfff4d8, 0x5a4a30, 0.5);
+const hemi = new THREE.HemisphereLight(0xffd090, 0x8a6030, 0.6);
 scene.add(hemi);
-const sun = new THREE.DirectionalLight(0xfff0d0, 1.4);
-sun.position.set(30, 40, 20);
+const sun = new THREE.DirectionalLight(0xffe0a0, 1.5);
+sun.position.set(60, 30, 10);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
 sun.shadow.camera.left = -50; sun.shadow.camera.right = 50;
@@ -132,18 +132,115 @@ sun.shadow.camera.top = 50; sun.shadow.camera.bottom = -50;
 sun.shadow.camera.near = 1; sun.shadow.camera.far = 100;
 sun.shadow.bias = -0.0005;
 scene.add(sun);
-const fill = new THREE.DirectionalLight(0x9bb8d4, 0.35);
+const fill = new THREE.DirectionalLight(0xc07030, 0.3);
 fill.position.set(-20, 10, -10);
 scene.add(fill);
 
 const ground = new THREE.Mesh(
-  new THREE.PlaneGeometry(150, 60),
-  new THREE.MeshStandardMaterial({ color: 0x6b6052, roughness: 0.95 })
+  new THREE.PlaneGeometry(300, 120),
+  new THREE.MeshStandardMaterial({ color: 0xc8a060, roughness: 0.95 })
 );
 ground.rotation.x = -Math.PI / 2;
 ground.position.y = -0.01;
 ground.receiveShadow = true;
 scene.add(ground);
+
+// Desert details: scattered small rocks
+const rockMat = new THREE.MeshStandardMaterial({ color: 0x9a7a50, roughness: 0.9 });
+for (let i = 0; i < 40; i++) {
+  const rx = (Math.random() - 0.5) * 120;
+  const rz = 6 + Math.random() * 40;
+  const rs = 0.15 + Math.random() * 0.35;
+  const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(rs, 0), rockMat);
+  rock.position.set(rx, rs * 0.4, rz);
+  rock.rotation.set(Math.random(), Math.random(), Math.random());
+  rock.castShadow = true;
+  scene.add(rock);
+  // Mirror to other side of tracks
+  const rock2 = rock.clone();
+  rock2.position.z = -rz;
+  scene.add(rock2);
+}
+
+// Distant mesas / buttes
+const mesaMat = new THREE.MeshStandardMaterial({ color: 0xb07040, roughness: 0.9 });
+const mesaDarkMat = new THREE.MeshStandardMaterial({ color: 0x7a4828, roughness: 0.95 });
+function addMesa(x, z, w, h, d) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mesaMat);
+  m.position.set(x, h / 2, z);
+  m.castShadow = true;
+  scene.add(m);
+  // Flat top layer
+  const top = new THREE.Mesh(new THREE.BoxGeometry(w * 1.05, h * 0.08, d * 1.05), mesaDarkMat);
+  top.position.set(x, h, z);
+  scene.add(top);
+}
+addMesa(-70, -55, 25, 18, 12);
+addMesa(-30, -60, 15, 12, 10);
+addMesa(20, -58, 30, 22, 15);
+addMesa(60, -52, 20, 15, 11);
+addMesa(90, -65, 18, 10, 8);
+addMesa(-85, 55, 20, 14, 10);
+addMesa(-20, 60, 28, 20, 14);
+addMesa(45, 58, 22, 16, 12);
+addMesa(80, 62, 16, 11, 9);
+
+// Cacti
+const cactusMat = new THREE.MeshStandardMaterial({ color: 0x2d6b1e, roughness: 0.85 });
+function addCactus(x, z, h) {
+  const g = new THREE.Group();
+  // Trunk
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.15, h, 6), cactusMat);
+  trunk.position.y = h / 2;
+  g.add(trunk);
+  if (h > 1.5) {
+    // Left arm
+    const armL = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, h * 0.4, 5), cactusMat);
+    armL.position.set(-0.2, h * 0.6, 0);
+    armL.rotation.z = Math.PI / 5;
+    g.add(armL);
+    const armLtop = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, h * 0.25, 5), cactusMat);
+    armLtop.position.set(-0.2 - h * 0.06, h * 0.6 + h * 0.15, 0);
+    g.add(armLtop);
+    // Right arm
+    const armR = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, h * 0.35, 5), cactusMat);
+    armR.position.set(0.2, h * 0.45, 0);
+    armR.rotation.z = -Math.PI / 4.5;
+    g.add(armR);
+    const armRtop = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, h * 0.22, 5), cactusMat);
+    armRtop.position.set(0.2 + h * 0.05, h * 0.45 + h * 0.12, 0);
+    g.add(armRtop);
+  }
+  g.position.set(x, 0, z);
+  g.castShadow = true;
+  scene.add(g);
+}
+addCactus(-50, 12, 2.2);
+addCactus(-35, -10, 1.8);
+addCactus(-15, 15, 2.5);
+addCactus(10, -14, 1.6);
+addCactus(30, 10, 2.0);
+addCactus(50, -12, 2.3);
+addCactus(-60, -8, 1.4);
+addCactus(70, 8, 1.9);
+addCactus(-42, 18, 1.7);
+addCactus(25, -18, 2.1);
+addCactus(55, 16, 1.5);
+
+// Large setting sun in background
+const sunDisc = new THREE.Mesh(
+  new THREE.CircleGeometry(8, 32),
+  new THREE.MeshBasicMaterial({ color: 0xf08020, transparent: true, opacity: 0.8, side: THREE.DoubleSide })
+);
+sunDisc.position.set(0, 12, -160);
+scene.add(sunDisc);
+// Sun glow
+const sunGlow = new THREE.Mesh(
+  new THREE.CircleGeometry(14, 32),
+  new THREE.MeshBasicMaterial({ color: 0xf0a040, transparent: true, opacity: 0.25, side: THREE.DoubleSide })
+);
+sunGlow.position.set(0, 12, -161);
+scene.add(sunGlow);
 
 const sleeperMat = new THREE.MeshStandardMaterial({ color: 0x4a3520, roughness: 0.9 });
 for (let z = -25; z <= 25; z += 0.9) {
@@ -789,7 +886,7 @@ function clearTrain() {
   savePositions(train);
   savePositions(dynamicGroup);
   while (train.children.length > 0) train.remove(train.children[0]);
-  if (dynamicGroup) { scene.remove(dynamicGroup); dynamicGroup = null; }
+  if (dynamicGroup) { train.remove(dynamicGroup); dynamicGroup = null; }
 }
 
 function rebuild() {
@@ -801,8 +898,9 @@ function rebuild() {
     ? STATE_DATA.cars.filter(c => c.index !== 0).length
     : DEFAULT_LOOT_DISTRIBUTION.length;
   const trainCenterLocal = (trainLeftEdge() + trainRightEdge(wagonCount)) / 2;
-  train.position.x = -trainCenterLocal;
+  train.position.x = trainCenterLocal; // positive because train.scale.x = -1
   train.position.z = 0;
+  train.scale.x = -1;
   const loco = buildLocomotive();
   train.add(loco);
   addEngineer(loco);
@@ -837,7 +935,7 @@ function rebuild() {
       train.add(w);
     }
     dynamicGroup = new THREE.Group();
-    scene.add(dynamicGroup);
+    train.add(dynamicGroup);
     // Place game content (loot, players, sheriff).
     let wagonIdx = 0;
     for (const car of STATE_DATA.cars) {
@@ -864,7 +962,7 @@ function rebuild() {
       train.add(w);
     }
     dynamicGroup = new THREE.Group();
-    scene.add(dynamicGroup);
+    train.add(dynamicGroup);
     // Loot per car.
     for (let i = 0; i < DEFAULT_LOOT_DISTRIBUTION.length; i++) {
       placeDefaultContent(i);
@@ -890,13 +988,13 @@ function rebuild() {
 }
 
 function xPosForWagon(idx) {
-  // World-space coordinate of wagon idx. Wagons start at x=train.position.x - 3.4.
-  return train.position.x + WAGON_START_X - idx * WAGON_SPACING;
+  // Train-local coordinate of wagon idx (dynamicGroup is child of train).
+  return WAGON_START_X - idx * WAGON_SPACING;
 }
 // Wagon centre spacing (first wagon centre at WAGON_START_X; wagons fan out to the LEFT).
 const WAGON_SPACING = 3.4;
 const WAGON_HALF = 1.375;            // wagonLen 2.75 / 2
-const WAGON_START_X = -4.0;          // centre of wagon #1 — just past the cab (back of cab = -3.9; front of wagon = -4.125)
+const WAGON_START_X = -5.5;          // centre of wagon #1 — clear of cab (cab left edge = -3.9)
 // Train horizontal bounds in loco-local space.
 function trainLeftEdge() { return cabCx - cabLen / 2; }
 function trainRightEdge(wagonCount) {
@@ -911,10 +1009,7 @@ function totalTrainWidth() {
 }
 // Train centre in world space (mid of loco + wagons).
 function getTrainCenter() {
-  const wagonCount = STATE_MODE && STATE_DATA
-    ? STATE_DATA.cars.filter(c => c.index !== 0).length
-    : DEFAULT_LOOT_DISTRIBUTION.length;
-  return train.position.x + (trainLeftEdge() + trainRightEdge(wagonCount)) / 2;
+  return 0; // train is centred at world origin (position.x compensates for scale.x = -1)
 }
 
 function placeDefaultContent(wagonIdx) {
@@ -1037,7 +1132,7 @@ for (let i = 0; i < 25; i++) {
 const VIEWS = {
   top:   { pos: [0, 42, 0.5],  target: [0, 1.5, 0] },
   three: { pos: [22, 34, 22],  target: [0, 1.5, 0] },
-  side:  { pos: [28, 6, 28],   target: [0, 1.5, 0] },
+  side:  { pos: [0, 5, 24],    target: [0, 1.5, 0] },
   close: { pos: [-6, 4, 6],    target: [-12, 1.0, 0] },
   orbit: null,
 };
@@ -1102,11 +1197,11 @@ document.querySelectorAll('#views button[data-view]').forEach(b => {
     if (b.dataset.view === 'orbit') {
       if (orbitActive) {
         stopOrbit();
-        // Restore last static view (top by default).
+        // Restore last static view (side by default).
         document.querySelectorAll('#views button[data-view]').forEach(x => x.classList.remove('active'));
-        const topBtn = document.querySelector('#views button[data-view="top"]');
-        if (topBtn) topBtn.classList.add('active');
-        setView('top');
+        const sideBtn = document.querySelector('#views button[data-view="side"]');
+        if (sideBtn) sideBtn.classList.add('active');
+        setView('side');
       } else {
         document.querySelectorAll('#views button[data-view]').forEach(x => x.classList.remove('active'));
         b.classList.add('active');
@@ -1203,7 +1298,7 @@ function animate() {
     if (p) {
       p.life = 0;
       p.maxLife = 3 + Math.random() * 2;
-      const locoX = train.position.x + 1.65;
+      const locoX = train.position.x - 1.65; // negative because train.scale.x = -1
       p.sprite.position.set(locoX, 2.85, 0);
       p.sprite.scale.set(0.4, 0.4, 0.4);
       p.sprite.material.opacity = 0.7;
@@ -1248,6 +1343,7 @@ function animate() {
 }
 
 rebuild();
+setView('side');
 animate();
 </script>
 </body>
