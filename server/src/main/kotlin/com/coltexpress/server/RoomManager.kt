@@ -114,7 +114,6 @@ class RoomManager {
         rooms[id] = room
         playerRoom[playerId] = id
         room.players.add(players.getValue(playerId))
-        addBots(room)
         session.sendMessage(Welcome(playerId, players.getValue(playerId).nickname, players.getValue(playerId).character))
         sendToRoom(room, roomUpdate(room))
         return playerId
@@ -191,6 +190,8 @@ class RoomManager {
                 sendToPlayer(playerId, Error("Need at least ${Setup.MIN_PLAYERS} players"))
                 return
             }
+            addBots(room)
+            sendToRoom(room, roomUpdate(room))
             val members = room.players.map { MemberSpec(it.id, it.nickname, it.character) }
             val engine = Setup.createEngine(members)
             room.engine = engine
