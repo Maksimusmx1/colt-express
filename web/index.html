@@ -420,7 +420,7 @@ function onPlanningTurn(m){
   faceDownAvailable=m.faceDownAvailable||false;
   choice=null;
   $('phase-badge').textContent='Планирование';$('phase-badge').className='phase-badge phase-planning';
-  updateRoundDisplay();updateTurnInfo();updateHand();
+  updateRoundDisplay();updateTurnInfo();renderHand();
   addLog('Ход: '+charName(currentTurn),'log-choice');
 }
 function onCardPlayed(m){
