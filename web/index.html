@@ -275,17 +275,8 @@ input,select{font-family:inherit}
     <details>
       <summary>Отладка</summary>
       <div class="debug-controls" id="debug-controls">
-        <span class="label">Шериф:</span>
-        <button id="dbg-sheriff-fwd" onclick="debugSheriff('F')">→ Вправо</button>
-        <button id="dbg-sheriff-back" onclick="debugSheriff('B')">← Влево</button>
-        <div class="dbg-sep"></div>
-        <span class="label">Бандит:</span>
-        <button id="dbg-bandit-fwd" onclick="debugMove('F')">→ Вперёд</button>
-        <button id="dbg-bandit-back" onclick="debugMove('B')">← Назад</button>
-        <button id="dbg-bandit-ladder" onclick="debugLadder()">Лестница</button>
-        <button id="dbg-bandit-shoot" onclick="debugShoot()">Выстрел</button>
-        <button id="dbg-bandit-rob" onclick="debugRob()">Кража</button>
-        <button id="dbg-bandit-punch" onclick="debugPunch()">Удар</button>
+        <span class="label">Camera:</span>
+        <span id="cam-info" style="font-family:monospace;font-size:11px;color:#B07A00">x: — y: — z: —</span>
         <div class="dbg-sep"></div>
         <button onclick="debugDumpState()">State</button>
         <button onclick="debugExportLog()">Export Log</button>
@@ -948,6 +939,12 @@ window.addEventListener('DOMContentLoaded',()=>{
   const dateStr=days[now.getDay()]+', '+now.getDate()+' '+months[now.getMonth()]+' '+now.getFullYear()+' г.';
   const dateEl=document.querySelector('.dateline span:first-child');
   if(dateEl)dateEl.textContent=dateStr;
+});
+window.addEventListener('message',e=>{
+  if(e.data&&e.data.type==='cameraInfo'){
+    const c=$('cam-info');
+    if(c)c.textContent='x: '+e.data.x.toFixed(1)+' y: '+e.data.y.toFixed(1)+' z: '+e.data.z.toFixed(1);
+  }
 });
 </script>
 </body>

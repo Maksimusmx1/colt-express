@@ -1287,6 +1287,7 @@ function onResize() {
 window.addEventListener('resize', onResize);
 
 const clock = new THREE.Clock();
+let frameCount = 0;
 function animate() {
   requestAnimationFrame(animate);
   const dt = clock.getDelta();
@@ -1340,6 +1341,10 @@ function animate() {
   updateOrbit(dt);
   controls.update();
   renderer.render(scene, camera);
+  // Send camera position to parent every 10 frames
+  if (++frameCount % 10 === 0 && window.parent && window.parent !== window) {
+    window.parent.postMessage({ type: 'cameraInfo', x: camera.position.x, y: camera.position.y, z: camera.position.z }, '*');
+  }
 }
 
 rebuild();
