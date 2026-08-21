@@ -1165,7 +1165,9 @@ let orbitT = 0;
 let orbitActive = false;
 const ORBIT_RADIUS = 32;
 const ORBIT_HEIGHT = 10;
-const ORBIT_SPEED = 0.25; // radians per second
+const ORBIT_SPEED = 0.375; // radians per second (1.5x)
+let introOrbit = true;      // first-load 360° sweep
+let introStartAngle = 0;
 function startOrbit() {
   orbitActive = true;
   orbitT = Math.atan2(camera.position.z, camera.position.x);
@@ -1191,6 +1193,11 @@ function updateOrbit(dt) {
   camera.position.z = cz + Math.sin(orbitT) * ORBIT_RADIUS;
   camera.position.y = ORBIT_HEIGHT;
   camera.lookAt(controls.target);
+  // Intro: one full 360° sweep, then switch to side view
+  if (introOrbit && orbitT - introStartAngle >= Math.PI * 2) {
+    introOrbit = false;
+    setView('side');
+  }
 }
 document.querySelectorAll('#views button[data-view]').forEach(b => {
   b.addEventListener('click', () => {
@@ -1348,7 +1355,10 @@ function animate() {
 }
 
 rebuild();
-setView('side');
+// Start with a 360° intro orbit
+introOrbit = true;
+startOrbit();
+introStartAngle = orbitT;  // capture starting angle after startOrbit sets it
 animate();
 </script>
 </body>
