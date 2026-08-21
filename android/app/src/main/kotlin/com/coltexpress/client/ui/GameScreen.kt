@@ -240,7 +240,7 @@ fun GameScreen(viewModel: GameViewModel = viewModel()) {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = "РЎР±РѕСЂРєР° $BUILD_NUMBER",
+                    text = "Сборка $BUILD_NUMBER",
                     style = MaterialTheme.typography.labelSmall,
                     modifier = Modifier.align(Alignment.CenterVertically),
                 )
@@ -255,21 +255,21 @@ fun GameScreen(viewModel: GameViewModel = viewModel()) {
                         )
                         Text(" ${(updateProgress!! * 100).toInt()}%")
                     } else {
-                        Text("РћР±РЅРѕРІРёС‚СЊ РєР»РёРµРЅС‚")
+                        Text("Обновить клиент")
                     }
                 }
                 if (isEmu && room?.ownerId == myId) {
-                    OutlinedButton(onClick = { viewModel.restartSession() }) { Text("РџРµСЂРµР·Р°РїСѓСЃС‚РёС‚СЊ СЃРµСЃСЃРёСЋ") }
+                    OutlinedButton(onClick = { viewModel.restartSession() }) { Text("Перезапустить сессию") }
                 }
             }
             if (updateAvailable) {
                 AlertDialog(
                     onDismissRequest = { viewModel.dismissUpdate() },
-                    title = { Text("Р”РѕСЃС‚СѓРїРЅРѕ РѕР±РЅРѕРІР»РµРЅРёРµ") },
+                    title = { Text("Доступно обновление") },
                     text = {
                         Text(
-                            "РЎРµСЂРІРµСЂ РїСЂРµРґР»Р°РіР°РµС‚ СЃР±РѕСЂРєСѓ РєР»РёРµРЅС‚Р° в„–${serverBuild ?: "?"} (Сѓ РІР°СЃ $BUILD_NUMBER). " +
-                                "РћР±РЅРѕРІРёС‚СЊ РєР»РёРµРЅС‚ СЃРµР№С‡Р°СЃ?"
+                            "Сервер предлагает сборку клиента №${serverBuild ?: "?"} (у вас $BUILD_NUMBER). " +
+                                "Обновить клиент сейчас?"
                         )
                     },
                     confirmButton = {
@@ -278,10 +278,10 @@ fun GameScreen(viewModel: GameViewModel = viewModel()) {
                                 viewModel.dismissUpdate()
                                 viewModel.updateClient()
                             },
-                        ) { Text("РћР±РЅРѕРІРёС‚СЊ") }
+                        ) { Text("Обновить") }
                     },
                     dismissButton = {
-                        TextButton(onClick = { viewModel.dismissUpdate() }) { Text("РџРѕР·Р¶Рµ") }
+                        TextButton(onClick = { viewModel.dismissUpdate() }) { Text("Позже") }
                     },
                 )
             }
@@ -313,14 +313,14 @@ private fun ConnectPanel(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
-                "Р•Р–Р•Р”РќР•Р’РќР«Р™ Р’Р•РЎРўРќРРљ Р–Р•Р›Р•Р—РќР«РҐ Р”РћР РћР“",
+                "ЕЖЕДНЕВНЫЙ ВЕСТНИК ЖЕЛЕЗНЫХ ДОРОГ",
                 style = MaterialTheme.typography.labelSmall,
                 color = PaperInkMuted,
                 modifier = Modifier.fillMaxWidth(),
                 textAlign = TextAlign.Left,
             )
             Text(
-                "РћСЃРЅРѕРІР°РЅ РІ 1871 РіРѕРґСѓ В· РџРµС‡Р°С‚Р°РµС‚СЃСЏ РїРѕ РјРµСЂРµ РїРѕСЃС‚СѓРїР»РµРЅРёСЏ РґРѕР±С‹С‡Рё",
+                "Основан в 1871 году · Печатается по мере поступления добычи",
                 style = MaterialTheme.typography.labelSmall,
                 color = PaperInkMuted,
                 modifier = Modifier.fillMaxWidth(),
@@ -336,7 +336,7 @@ private fun ConnectPanel(
                 textAlign = TextAlign.Center,
             )
             Text(
-                "Р“РђР—Р•РўРђ Р—РђРџРђР”Рђ",
+                "ГАЗЕТА ЗАПАДА",
                 fontFamily = FontFamily.Serif,
                 fontWeight = FontWeight.Bold,
                 fontSize = 13.sp,
@@ -348,14 +348,14 @@ private fun ConnectPanel(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                Text("РЎСЂРµРґР°, 3 Р°РІРіСѓСЃС‚Р° 1887 Рі.", style = MaterialTheme.typography.labelSmall, color = PaperInkMuted)
-                Text("в„– 42", style = MaterialTheme.typography.labelSmall, color = PaperInkMuted)
+                Text("Среда, 3 августа 1887 г.", style = MaterialTheme.typography.labelSmall, color = PaperInkMuted)
+                Text("№ 42", style = MaterialTheme.typography.labelSmall, color = PaperInkMuted)
             }
             HorizontalDivider(thickness = 2.dp, color = PaperInk)
             HorizontalDivider(thickness = 1.dp, color = PaperInk)
             Spacer(Modifier.height(16.dp))
             Text(
-                "Р‘РђРќР”Рђ РљРћР›Р¬РўРђ РЎРќРћР’Рђ Р’Р«РҐРћР”РРў РќРђ Р‘РћР›Р¬РЁРЈР® Р”РћР РћР“РЈ!",
+                "БАНДА КОЛЬТА СНОВА ВЫХОДИТ НА БОЛЬШУЮ ДОРОГУ!",
                 fontFamily = FontFamily.Serif,
                 fontWeight = FontWeight.Bold,
                 fontSize = 28.sp,
@@ -364,17 +364,17 @@ private fun ConnectPanel(
             )
             Spacer(Modifier.height(8.dp))
             Text(
-                "РўРµР»РµРіСЂР°С„ РґРѕРЅРѕСЃРёС‚: РїРѕ Р·Р°РїР°РґРЅС‹Рј С€С‚Р°С‚Р°Рј РєСѓСЂСЃРёСЂСѓРµС‚ СЃРѕСЃС‚Р°РІ СЃ Р·РѕР»РѕС‚РѕРј. " +
-                    "Р”Р»СЏ РѕРіСЂР°Р±Р»РµРЅРёСЏ С‚СЂРµР±СѓСЋС‚СЃСЏ РѕС‚С‡Р°СЏРЅРЅС‹Рµ Р±Р°РЅРґРёС‚С‹. РџРѕРґРєР»СЋС‡РёС‚РµСЃСЊ Рє СЃРµСЂРІРµСЂСѓ Рё РїСЂРёСЃРѕРµРґРёРЅСЏР№С‚РµСЃСЊ Рє Р±Р°РЅРґРµ.",
+                "Телеграф доносит: по западным штатам курсирует состав с золотом. " +
+                    "Для ограбления требуются отчаянные бандиты. Подключитесь к серверу и присоединяйтесь к банде.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = PaperInkMuted,
                 textAlign = TextAlign.Center,
             )
             Spacer(Modifier.height(16.dp))
             val status = when (connection) {
-                ConnectionState.Connected -> "Р‘Р°РЅРґР° РЅР° СЃРІСЏР·Рё: СЃРµСЂРІРµСЂ РѕС‚РІРµС‡Р°РµС‚." to Color(0xFF2E7D32)
-                ConnectionState.Connecting -> "РЈСЃС‚Р°РЅР°РІР»РёРІР°РµРј СЃРІСЏР·СЊ СЃ С‚РµР»РµРіСЂР°С„РѕРј..." to Color(0xFFB07A00)
-                ConnectionState.Disconnected -> "РЎРІСЏР·СЊ РїСЂРµСЂРІР°РЅР°: СЃРµСЂРІРµСЂ РЅРµРґРѕСЃС‚СѓРїРµРЅ. РџСЂРѕРІРµСЂРєР° РєР°Р¶РґСѓСЋ РјРёРЅСѓС‚Сѓ." to Color(0xFFC62828)
+                ConnectionState.Connected -> "Банда на связи: сервер отвечает." to Color(0xFF2E7D32)
+                ConnectionState.Connecting -> "Устанавливаем связь с телеграфом..." to Color(0xFFB07A00)
+                ConnectionState.Disconnected -> "Связь прервана: сервер недоступен. Проверка каждую минуту." to Color(0xFFC62828)
             }
             Box(
                 modifier = Modifier
@@ -392,7 +392,7 @@ private fun ConnectPanel(
                         )
                         Spacer(Modifier.width(8.dp))
                         Text(
-                            "РўР•Р›Р•Р“Р РђР¤РќРђРЇ РЎР’РћР”РљРђ",
+                            "ТЕЛЕГРАФНАЯ СВОДКА",
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Bold,
                             color = PaperInk,
@@ -406,8 +406,8 @@ private fun ConnectPanel(
                 value = nickname,
                 onValueChange = onNickname,
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text("Р’Р°С€Рµ РёРјСЏ (РґР»СЏ РїРѕРґРїРёСЃРё РІ РіР°Р·РµС‚Рµ)") },
-                placeholder = { Text("Р‘Р°РЅРґРёС‚") },
+                label = { Text("Ваше имя (для подписи в газете)") },
+                placeholder = { Text("Бандит") },
                 singleLine = true,
                 enabled = connection !is ConnectionState.Connecting,
             )
@@ -416,7 +416,7 @@ private fun ConnectPanel(
                 value = serverAddress,
                 onValueChange = onServerAddress,
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text("РђРґСЂРµСЃ С‚РµР»РµРіСЂР°С„Р° (СЃРµСЂРІРµСЂ)") },
+                label = { Text("Адрес телеграфа (сервер)") },
                 placeholder = { Text("colt.example.com:8080") },
                 singleLine = true,
                 enabled = connection !is ConnectionState.Connecting,
@@ -427,7 +427,7 @@ private fun ConnectPanel(
                 modifier = Modifier.fillMaxWidth().height(52.dp),
                 enabled = connection !is ConnectionState.Connecting,
             ) {
-                Text("РќРђР‘РћР  Р’ Р‘РђРќР”РЈ", fontWeight = FontWeight.Bold)
+                Text("НАБОР В БАНДУ", fontWeight = FontWeight.Bold)
             }
         }
     }
@@ -448,9 +448,9 @@ private fun RoomEntryPanel(
     val keyboard = LocalSoftwareKeyboardController.current
     LaunchedEffect(Unit) { onRefresh() }
     Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
-        Text("РџРѕРґРєР»СЋС‡РµРЅРѕ. РЎРѕР·РґР°Р№С‚Рµ РєРѕРјРЅР°С‚Сѓ РёР»Рё РІРѕР№РґРёС‚Рµ РІ СЃСѓС‰РµСЃС‚РІСѓСЋС‰СѓСЋ.", style = MaterialTheme.typography.bodyMedium)
+        Text("Подключено. Создайте комнату или войдите в существующую.", style = MaterialTheme.typography.bodyMedium)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("РРіСЂРѕРєРё:", style = MaterialTheme.typography.bodyMedium)
+            Text("Игроки:", style = MaterialTheme.typography.bodyMedium)
             (3..6).forEach { n ->
                 OutlinedButton(
                     onClick = { onMaxPlayers(n) },
@@ -458,25 +458,25 @@ private fun RoomEntryPanel(
                 ) { Text(if (n == maxPlayers) "[$n]" else "$n") }
             }
         }
-        Button(onClick = onCreate) { Text("РЎРѕР·РґР°С‚СЊ РєРѕРјРЅР°С‚Сѓ ($maxPlayers РёРіСЂРѕРєРѕРІ)") }
+        Button(onClick = onCreate) { Text("Создать комнату ($maxPlayers игроков)") }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedTextField(
                 value = joinId,
                 onValueChange = onJoinId,
                 modifier = Modifier.weight(1f),
-                placeholder = { Text("ID РєРѕРјРЅР°С‚С‹") },
+                placeholder = { Text("ID комнаты") },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(onDone = { keyboard?.hide(); onJoin() }),
             )
-            Button(onClick = { keyboard?.hide(); onJoin() }) { Text("Р’РѕР№С‚Рё") }
+            Button(onClick = { keyboard?.hide(); onJoin() }) { Text("Войти") }
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Р”РѕСЃС‚СѓРїРЅС‹Рµ РєРѕРјРЅР°С‚С‹:", style = MaterialTheme.typography.titleSmall)
-            Button(onClick = onRefresh) { Text("РћР±РЅРѕРІРёС‚СЊ") }
+            Text("Доступные комнаты:", style = MaterialTheme.typography.titleSmall)
+            Button(onClick = onRefresh) { Text("Обновить") }
         }
         if (rooms.isEmpty()) {
-            Text("РљРѕРјРЅР°С‚ РїРѕРєР° РЅРµС‚.", style = MaterialTheme.typography.bodySmall)
+            Text("Комнат пока нет.", style = MaterialTheme.typography.bodySmall)
         } else {
             rooms.forEach { r ->
                 Row(
@@ -485,11 +485,11 @@ private fun RoomEntryPanel(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     Text(
-                        "РљРѕРјРЅР°С‚Р° ${r.ownerNickname}  ${r.roomId}  (${r.players}/${r.maxPlayers})",
+                        "Комната ${r.ownerNickname}  ${r.roomId}  (${r.players}/${r.maxPlayers})",
                         modifier = Modifier.weight(1f),
                         style = MaterialTheme.typography.bodySmall,
                     )
-                    Button(onClick = { keyboard?.hide(); onJoinRoom(r.roomId) }) { Text("Р’РѕР№С‚Рё") }
+                    Button(onClick = { keyboard?.hide(); onJoinRoom(r.roomId) }) { Text("Войти") }
                 }
             }
         }
@@ -532,30 +532,30 @@ private fun GamePanel(
                 modifier = Modifier.padding(top = 56.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("РљРѕРјРЅР°С‚Р° $roomId", style = MaterialTheme.typography.titleMedium)
+                Text("Комната $roomId", style = MaterialTheme.typography.titleMedium)
             }
             if (myCharacter != null) {
-                Text("Р’С‹ вЂ” ${characterName(myCharacter)}", style = MaterialTheme.typography.bodySmall)
+                Text("Вы — ${characterName(myCharacter)}", style = MaterialTheme.typography.bodySmall)
             }
             Column {
                 players.forEach { p ->
                     Text(
                         buildAnnotatedString {
                             append(p.nickname)
-                            append(" вЂ” ")
+                            append(" — ")
                             withStyle(SpanStyle(color = characterColor(p.character), shadow = characterShadow(p.character))) {
                                 append(characterName(p.character))
                             }
-                            if (p.id == myId) append(" (РІС‹)")
+                            if (p.id == myId) append(" (вы)")
                         },
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
-                Text("${players.size}/$maxPlayers РёРіСЂРѕРєРѕРІ")
+                Text("${players.size}/$maxPlayers игроков")
                 if (isOwner && players.size >= 3) {
-                    Button(onClick = { viewModel.startGame() }) { Text("РќР°С‡Р°С‚СЊ РёРіСЂСѓ") }
+                    Button(onClick = { viewModel.startGame() }) { Text("Начать игру") }
                 } else {
-                    Text("РћР¶РёРґР°РЅРёРµ РЅР°С‡Р°Р»Р° РёРіСЂС‹ РІР»Р°РґРµР»СЊС†РµРј (РЅСѓР¶РЅРѕ РјРёРЅРёРјСѓРј 3)...", style = MaterialTheme.typography.bodySmall)
+                    Text("Ожидание начала игры владельцем (нужно минимум 3)...", style = MaterialTheme.typography.bodySmall)
                 }
             }
             if (lastLog != null) {
@@ -576,9 +576,9 @@ private fun GamePanel(
                 Text(
                     text = buildString {
                         if (round != null) {
-                            append("Р Р°СѓРЅРґ ${round!!.round}/5  ${round!!.mode}  (${round!!.turns} С…РѕРґРѕРІ)")
+                            append("Раунд ${round!!.round}/5  ${round!!.mode}  (${round!!.turns} ходов)")
                         }
-                        if (roomPhase == "ROBBERY") append("  РћРіСЂР°Р±Р»РµРЅРёРµ")
+                        if (roomPhase == "ROBBERY") append("  Ограбление")
                     },
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
@@ -591,7 +591,7 @@ private fun GamePanel(
                             }
                             append("  |  ")
                         }
-                        append("РџСѓР»Рё: $ownBullets  |  РљРѕР»РѕРґР°: $deckSize")
+                        append("Пули: $ownBullets  |  Колода: $deckSize")
                     },
                     style = MaterialTheme.typography.bodySmall,
                 )
@@ -602,17 +602,17 @@ private fun GamePanel(
 
         when {
             gameOver != null -> {
-                Text("РРіСЂР° РѕРєРѕРЅС‡РµРЅР°!", style = MaterialTheme.typography.headlineSmall)
+                Text("Игра окончена!", style = MaterialTheme.typography.headlineSmall)
                 gameOver.results.forEach { r ->
-                    Text("${r.nickname}: ${r.total} (РґРѕР±С‹С‡Р° ${r.lootSum} + ${if (r.accuracyPrize) "РїСЂРёР· 1000" else "0"})")
+                    Text("${r.nickname}: ${r.total} (добыча ${r.lootSum} + ${if (r.accuracyPrize) "приз 1000" else "0"})")
                 }
             }
             myTurn -> {
-                Text("Р’Р°С€ С…РѕРґ!", style = MaterialTheme.typography.titleMedium, color = Color(0xFF2E7D32))
-                Text("РќР°Р¶РјРёС‚Рµ РєР°СЂС‚Сѓ, С‡С‚РѕР±С‹ СЃС‹РіСЂР°С‚СЊ, РёР»Рё РІРѕР·СЊРјРёС‚Рµ 3:", style = MaterialTheme.typography.bodySmall)
+                Text("Ваш ход!", style = MaterialTheme.typography.titleMedium, color = Color(0xFF2E7D32))
+                Text("Нажмите карту, чтобы сыграть, или возьмите 3:", style = MaterialTheme.typography.bodySmall)
             }
             choice != null && choice!!.playerId == myId -> {
-                Text("Р’С‹Р±РµСЂРёС‚Рµ ${choiceKindName(choice!!.kind)}:", style = MaterialTheme.typography.titleMedium)
+                Text("Выберите ${choiceKindName(choice!!.kind)}:", style = MaterialTheme.typography.titleMedium)
                 choice!!.options.forEach { opt ->
                     OutlinedButton(
                         onClick = { viewModel.choose(opt) },
@@ -622,14 +622,14 @@ private fun GamePanel(
             }
             else -> {
                 Text(
-                    text = if (currentTurn != null) "РћР¶РёРґР°РЅРёРµ: ${name(players, currentTurn!!)}..." else "Р”СѓРјР°РµС‚...",
+                    text = if (currentTurn != null) "Ожидание: ${name(players, currentTurn!!)}..." else "Думает...",
                     style = MaterialTheme.typography.bodyMedium,
                 )
             }
         }
 
         if (roomPhase == "PLANNING" && hand.isNotEmpty()) {
-            Text("Р’Р°С€Рё РєР°СЂС‚С‹ (${hand.size}):", style = MaterialTheme.typography.titleSmall)
+            Text("Ваши карты (${hand.size}):", style = MaterialTheme.typography.titleSmall)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -641,7 +641,7 @@ private fun GamePanel(
                         modifier = Modifier.weight(1f),
                     ) {
                         Text(
-                            text = if (card.type == "BULLET") "РџСѓР»СЏ" else cardName(card.type),
+                            text = if (card.type == "BULLET") "Пуля" else cardName(card.type),
                             style = MaterialTheme.typography.bodySmall,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
@@ -650,11 +650,11 @@ private fun GamePanel(
                 }
             }
             if (myTurn && round?.mode != "ON_THE_RUN") {
-                Button(onClick = { viewModel.draw() }) { Text("Р’Р·СЏС‚СЊ 3 РєР°СЂС‚С‹") }
+                Button(onClick = { viewModel.draw() }) { Text("Взять 3 карты") }
             }
         }
 
-        Text("Р›РѕРі:", style = MaterialTheme.typography.titleSmall)
+        Text("Лог:", style = MaterialTheme.typography.titleSmall)
         LazyColumn(modifier = Modifier.height(64.dp)) {
             items(log.takeLast(3)) { line -> Text(line, style = MaterialTheme.typography.bodySmall) }
         }
@@ -683,7 +683,7 @@ private fun TrainView(
         Row(verticalAlignment = Alignment.CenterVertically) {
             HorizontalDivider(Modifier.weight(1f), thickness = 1.dp, color = PaperInk)
             Text(
-                "  РЎРћРЎРўРђР’ РџРћР•Р—Р”Рђ  ",
+                "  СОСТАВ ПОЕЗДА  ",
                 fontFamily = FontFamily.Serif,
                 fontWeight = FontWeight.Bold,
                 fontSize = 12.sp,
@@ -755,20 +755,20 @@ private fun TrainCar(
         Column(Modifier.fillMaxWidth()) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
-                    if (isLoc) "Р›РћРљРћРњРћРўРР’" else "Р’РђР“РћРќ в„–${car.index}",
+                    if (isLoc) "ЛОКОМОТИВ" else "ВАГОН №${car.index}",
                     fontFamily = FontFamily.Serif,
                     fontWeight = FontWeight.Bold,
                     fontSize = 11.sp,
                     color = PaperInk,
                 )
                 if (isSheriff) {
-                    Text("РЁРµСЂРёС„", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = PaperRust)
+                    Text("Шериф", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = PaperRust)
                 }
             }
-            CarLegend("Р’ РІР°РіРѕРЅРµ: ", car.inside, charById)
-            CarLegend("РќР° РєСЂС‹С€Рµ: ", car.roof, charById)
+            CarLegend("В вагоне: ", car.inside, charById)
+            CarLegend("На крыше: ", car.roof, charById)
             if ((car.lootInside.size + car.lootRoof.size) > 0) {
-                Text("Добыча: ${car.lootInside.size + car.lootRoof.size}", fontSize = 9.sp, color = PaperInkMuted)
+                Text("������: ${car.lootInside.size + car.lootRoof.size}", fontSize = 9.sp, color = PaperInkMuted)
             }
         }
     }
@@ -982,7 +982,7 @@ private fun ChatSheetContent(
                 value = draft,
                 onValueChange = onDraft,
                 modifier = Modifier.weight(1f),
-                placeholder = { Text("Р§Р°С‚") },
+                placeholder = { Text("Чат") },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(onDone = { keyboard?.hide() }),
@@ -992,7 +992,7 @@ private fun ChatSheetContent(
                     keyboard?.hide()
                     onSend()
                 },
-            ) { Text("РћС‚РїСЂР°РІРёС‚СЊ") }
+            ) { Text("Отправить") }
         }
     }
 }
@@ -1026,6 +1026,6 @@ private fun isEmulator(): Boolean =
         Build.FINGERPRINT.contains("sdk_gphone")
 
 private fun botNickname(): String {
-    val tags = listOf("Р”РёРЅР°РјРёС‚", "РљСѓРІР°Р»РґР°", "РЎРµРґР»Рѕ", "РџС‹Р»СЊ", "Р“СЂРѕР·Р°", "Р Р¶Р°РІС‹Р№")
+    val tags = listOf("Динамит", "Кувалда", "Седло", "Пыль", "Гроза", "Ржавый")
     return "${tags.random()}-${Random.nextInt(100, 999)}"
 }
