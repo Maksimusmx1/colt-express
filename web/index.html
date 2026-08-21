@@ -515,7 +515,7 @@ function renderRoom(r){
   $('room-title').textContent='Комната '+r.roomId;
   const isOwner=r.ownerId===myId;
   $('start-btn').style.display=isOwner?'block':'none';
-  $('start-btn').disabled=!(isOwner&&r.players.length>=2);
+  $('start-btn').disabled=!isOwner;
   $('room-players').innerHTML=r.players.map(p=>{
     const ch=characters[p.id]||'';const cls=ch?'char-'+ch:'';
     const icon=ch?`<span style="display:inline-block;vertical-align:middle;margin-right:4px">${meepleSvg(ch,false,16)}</span>`:'';

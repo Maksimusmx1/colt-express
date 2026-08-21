@@ -186,8 +186,8 @@ class RoomManager {
                 return
             }
             if (room.engine != null) return
-            if (room.players.size < Setup.MIN_PLAYERS) {
-                sendToPlayer(playerId, Error("Need at least ${Setup.MIN_PLAYERS} players"))
+            if (room.players.size < 1) {
+                sendToPlayer(playerId, Error("No players in room"))
                 return
             }
             addBots(room)
