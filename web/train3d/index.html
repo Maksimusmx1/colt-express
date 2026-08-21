@@ -87,6 +87,7 @@ function applyState(json) {
 window.setState = applyState;
 window.addEventListener('message', (e) => {
   if (e.data && e.data.type === 'setState') applyState(e.data.payload);
+  if (e.data && e.data.type === 'setTheme') applyTheme(e.data.theme);
 });
 
 // === Three.js setup ===
@@ -1352,6 +1353,52 @@ function animate() {
   if (++frameCount % 10 === 0 && window.parent && window.parent !== window) {
     window.parent.postMessage({ type: 'cameraInfo', x: camera.position.x, y: camera.position.y, z: camera.position.z }, '*');
   }
+}
+
+// === THEME ===
+const THEMES = {
+  dark: {
+    skyTop: 0x1a0a2e, skyMid: 0xc85a28, skyBot: 0xf0c060,
+    fog: 0xf0c060, fogNear: 60, fogFar: 180,
+    hemiSky: 0xffd090, hemiGround: 0x8a6030, hemiInt: 0.6,
+    sunColor: 0xffe0a0, sunInt: 1.5, sunX: 60, sunY: 30,
+    fillColor: 0xc07030, fillInt: 0.3,
+    ground: 0xc8a060, exposure: 1.0,
+    sunDisc: 0xf08020, sunGlow: 0xf0a040, bodyBg: '#1a0a2e',
+  },
+  light: {
+    skyTop: 0x4a90d9, skyMid: 0x87ceeb, skyBot: 0xc8e8ff,
+    fog: 0xc8e8ff, fogNear: 80, fogFar: 220,
+    hemiSky: 0xffffff, hemiGround: 0xc8b090, hemiInt: 0.8,
+    sunColor: 0xffffee, sunInt: 1.8, sunX: 50, sunY: 45,
+    fillColor: 0x8ab4d4, fillInt: 0.4,
+    ground: 0xdeb87a, exposure: 1.1,
+    sunDisc: 0xfff4d0, sunGlow: 0xfffac0, bodyBg: '#87ceeb',
+  }
+};
+let currentTheme = 'dark';
+function applyTheme(name) {
+  const t = THEMES[name]; if (!t) return;
+  currentTheme = name;
+  skyMat.uniforms.topColor.value.setHex(t.skyTop);
+  skyMat.uniforms.midColor.value.setHex(t.skyMid);
+  skyMat.uniforms.bottomColor.value.setHex(t.skyBot);
+  scene.fog.color.setHex(t.fog);
+  scene.fog.near = t.fogNear;
+  scene.fog.far = t.fogFar;
+  hemi.color.setHex(t.hemiSky);
+  hemi.groundColor.setHex(t.hemiGround);
+  hemi.intensity = t.hemiInt;
+  sun.color.setHex(t.sunColor);
+  sun.intensity = t.sunInt;
+  sun.position.set(t.sunX, t.sunY, 10);
+  fill.color.setHex(t.fillColor);
+  fill.intensity = t.fillInt;
+  ground.material.color.setHex(t.ground);
+  renderer.toneMappingExposure = t.exposure;
+  sunDisc.material.color.setHex(t.sunDisc);
+  sunGlow.material.color.setHex(t.sunGlow);
+  document.body.style.background = t.bodyBg;
 }
 
 rebuild();

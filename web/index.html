@@ -167,16 +167,27 @@ input,select{font-family:inherit}
 .choice-box button:hover{border-color:var(--ink);background:var(--bg);transform:translateX(4px)}
 .choice-box button .choice-icon{width:22px;height:22px;flex-shrink:0}
 
-/* Debug panel */
-.debug-panel{background:#1a1008;color:#F2E9D4;border-top:2px solid var(--rust);padding:8px 14px;font-size:12px}
-.debug-panel summary{cursor:pointer;font-weight:700;color:var(--rust);font-size:11px;letter-spacing:1px;text-transform:uppercase;user-select:none}
-.debug-controls{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;align-items:center}
-.debug-controls button{padding:6px 12px;border:1px solid var(--rust);border-radius:4px;background:transparent;color:var(--rust);font-size:11px;font-weight:600;transition:all .15s}
-.debug-controls button:hover{background:var(--rust);color:var(--bg)}
-.debug-controls button:disabled{opacity:.3;cursor:default;background:transparent;color:var(--rust)}
-.debug-controls .dbg-sep{width:1px;height:24px;background:rgba(140,47,36,.3)}
-.debug-log{max-height:120px;overflow-y:auto;font-family:monospace;font-size:10px;line-height:1.6;color:#B07A00;background:rgba(0,0,0,.2);padding:4px 8px;border-radius:4px;margin-top:6px;white-space:pre-wrap;word-break:break-all}
-.debug-controls .label{font-size:10px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-right:4px}
+/* Settings dropdown */
+.settings-wrap{position:relative;margin-left:auto}
+.settings-btn{background:transparent;border:1px solid rgba(242,233,212,.3);color:var(--bg);padding:4px 8px;border-radius:4px;font-size:16px;cursor:pointer;line-height:1;transition:background .15s}
+.settings-btn:hover{background:rgba(242,233,212,.15)}
+.settings-dropdown{display:none;position:absolute;right:0;top:100%;margin-top:4px;background:var(--ink);border:1px solid rgba(242,233,212,.2);border-radius:8px;padding:10px;min-width:280px;z-index:100;box-shadow:0 8px 24px rgba(0,0,0,.5)}
+.settings-dropdown.open{display:block}
+.settings-section{margin-bottom:10px}
+.settings-section:last-child{margin-bottom:0}
+.settings-label{font-size:10px;color:rgba(242,233,212,.5);letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;font-weight:700}
+.settings-row{display:flex;align-items:center;gap:8px}
+.theme-toggle{display:flex;border:1px solid rgba(242,233,212,.3);border-radius:4px;overflow:hidden}
+.theme-toggle button{flex:1;padding:5px 12px;border:none;background:transparent;color:rgba(242,233,212,.5);font-size:11px;font-weight:600;cursor:pointer;transition:all .15s}
+.theme-toggle button.active{background:rgba(242,233,212,.15);color:var(--bg)}
+.settings-dropdown .dbg-sep{width:100%;height:1px;background:rgba(242,233,212,.1);margin:8px 0}
+.cam-info{font-family:monospace;font-size:11px;color:rgba(242,233,212,.6)}
+.settings-dropdown button.dbg-action{padding:5px 10px;border:1px solid rgba(242,233,212,.3);border-radius:4px;background:transparent;color:rgba(242,233,212,.7);font-size:11px;font-weight:600;cursor:pointer;transition:all .15s}
+.settings-dropdown button.dbg-action:hover{background:rgba(242,233,212,.15);color:var(--bg)}
+.debug-log-inner{max-height:100px;overflow-y:auto;font-family:monospace;font-size:10px;line-height:1.6;color:rgba(242,233,212,.5);background:rgba(0,0,0,.2);padding:4px 8px;border-radius:4px;margin-top:6px;white-space:pre-wrap;word-break:break-all}
+
+/* Legacy debug panel (hidden) */
+.debug-panel{display:none}
 
 /* Game over */
 .gameover{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(43,29,15,.85);display:flex;align-items:center;justify-content:center;z-index:100;backdrop-filter:blur(3px)}
@@ -229,7 +240,34 @@ input,select{font-family:inherit}
     <span class="round-label" id="round-label"></span>
     <div class="round-chips" id="round-chips"></div>
     <span class="phase-badge" id="phase-badge"></span>
-    <button id="train3d-btn" onclick="window.open('/train3d/','_blank')" title="Осмотреть 3D-поезд" style="background:transparent;border:1px solid rgba(242,233,212,.3);color:var(--bg);padding:4px 10px;border-radius:4px;font-size:14px;cursor:pointer;margin-left:auto">🚂</button>
+    <div class="settings-wrap">
+      <button class="settings-btn" id="settings-btn" title="Настройки">&#9881;</button>
+      <div class="settings-dropdown" id="settings-dropdown">
+        <div class="settings-section">
+          <div class="settings-label">Тема 3D</div>
+          <div class="theme-toggle" id="theme-toggle">
+            <button data-theme="dark" class="active" onclick="set3DTheme('dark')">Тёмная</button>
+            <button data-theme="light" onclick="set3DTheme('light')">Светлая</button>
+          </div>
+        </div>
+        <div class="dbg-sep"></div>
+        <div class="settings-section">
+          <div class="settings-label">Отладка</div>
+          <div class="settings-row" style="margin-bottom:6px">
+            <span class="cam-info" id="cam-info">x: — y: — z: —</span>
+          </div>
+          <div class="settings-row">
+            <button class="dbg-action" onclick="debugDumpState()">State</button>
+            <button class="dbg-action" onclick="debugExportLog()">Export Log</button>
+          </div>
+        </div>
+        <div class="dbg-sep"></div>
+        <div class="settings-section">
+          <div class="settings-label">Лог</div>
+          <div class="debug-log-inner" id="debug-log"></div>
+        </div>
+      </div>
+    </div>
   </div>
   <div class="status-row">
     <div class="player-card">
@@ -270,19 +308,6 @@ input,select{font-family:inherit}
         </div>
       </div>
     </div>
-  </div>
-  <div class="debug-panel">
-    <details>
-      <summary>Отладка</summary>
-      <div class="debug-controls" id="debug-controls">
-        <span class="label">Camera:</span>
-        <span id="cam-info" style="font-family:monospace;font-size:11px;color:#B07A00">x: — y: — z: —</span>
-        <div class="dbg-sep"></div>
-        <button onclick="debugDumpState()">State</button>
-        <button onclick="debugExportLog()">Export Log</button>
-      </div>
-      <div class="debug-log" id="debug-log"></div>
-    </details>
   </div>
 </div>
 
@@ -754,6 +779,7 @@ function renderTrain(){
     turnIndex: turnIndex,
   };
   frame.contentWindow.postMessage({type:'setState',payload},'*');
+  frame.contentWindow.postMessage({type:'setTheme',theme:current3DTheme},'*');
   console.log('[3D] sent state:', payload);
   gameLog('3D setState sent: '+payload.cars.length+' cars, sheriff@'+payload.sheriffCar+' players='+payload.players.length);
 }
@@ -933,12 +959,23 @@ window.addEventListener('DOMContentLoaded',()=>{
   const n=localStorage.getItem('ce_nick');const a=localStorage.getItem('ce_addr');
   if(n)$('nickname').value=n;
   $('server-addr').value=a||location.host||'';
-  // Set dynamic date in newspaper header
   const now=new Date();const days=['Воскресенье','Понедельник','Вторник','Среда','Четверг','Пятница','Суббота'];
   const months=['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
   const dateStr=days[now.getDay()]+', '+now.getDate()+' '+months[now.getMonth()]+' '+now.getFullYear()+' г.';
   const dateEl=document.querySelector('.dateline span:first-child');
   if(dateEl)dateEl.textContent=dateStr;
+  // Settings dropdown toggle
+  $('settings-btn').addEventListener('click',e=>{
+    e.stopPropagation();
+    $('settings-dropdown').classList.toggle('open');
+  });
+  document.addEventListener('click',()=>{
+    $('settings-dropdown').classList.remove('open');
+  });
+  $('settings-dropdown').addEventListener('click',e=>e.stopPropagation());
+  // Restore theme preference
+  const saved=localStorage.getItem('ce_3d_theme')||'dark';
+  set3DTheme(saved);
 });
 window.addEventListener('message',e=>{
   if(e.data&&e.data.type==='cameraInfo'){
@@ -946,6 +983,18 @@ window.addEventListener('message',e=>{
     if(c)c.textContent='x: '+e.data.x.toFixed(1)+' y: '+e.data.y.toFixed(1)+' z: '+e.data.z.toFixed(1);
   }
 });
+let current3DTheme='dark';
+function set3DTheme(theme){
+  current3DTheme=theme;
+  localStorage.setItem('ce_3d_theme',theme);
+  document.querySelectorAll('#theme-toggle button').forEach(b=>{
+    b.classList.toggle('active',b.dataset.theme===theme);
+  });
+  const frame=$('train3d-frame');
+  if(frame&&frame.contentWindow){
+    frame.contentWindow.postMessage({type:'setTheme',theme},'*');
+  }
+}
 </script>
 </body>
 </html>
