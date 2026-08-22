@@ -1169,9 +1169,15 @@ const ORBIT_HEIGHT = 3.5;
 const ORBIT_SPEED = 0.375; // radians per second (1.5x)
 let introOrbit = true;      // first-load 360° sweep
 let introStartAngle = 0;
+let introTransition = false; // smooth lerp to side view after orbit
+let introTargetPos = null;
+let introTargetLook = null;
 function startOrbit() {
   orbitActive = true;
+  introTransition = false;
+  introOrbit = true;
   orbitT = Math.atan2(camera.position.z, camera.position.x);
+  introStartAngle = orbitT;
   // Aim orbit at the train center (in world space) at the train's vertical centre.
   const cx = getTrainCenter();
   controls.target.set(cx, getTrainYCenter(), 0);
@@ -1187,6 +1193,20 @@ function stopOrbit() {
 }
 function updateOrbit(dt) {
   if (!orbitActive) return;
+  // Smooth lerp to side view after intro orbit
+  if (introTransition) {
+    const LERP_SPEED = 3.0;
+    const t = Math.min(1, dt * LERP_SPEED);
+    camera.position.lerp(introTargetPos, t);
+    controls.target.lerp(introTargetLook, t);
+    camera.lookAt(controls.target);
+    if (camera.position.distanceTo(introTargetPos) < 0.05) {
+      introTransition = false;
+      stopOrbit();
+      controls.update();
+    }
+    return;
+  }
   orbitT += dt * ORBIT_SPEED;
   const cx = controls.target.x;
   const cz = controls.target.z;
@@ -1194,10 +1214,16 @@ function updateOrbit(dt) {
   camera.position.z = cz + Math.sin(orbitT) * ORBIT_RADIUS;
   camera.position.y = ORBIT_HEIGHT;
   camera.lookAt(controls.target);
-  // Intro: one full 360° sweep, then switch to side view
+  // Intro: one full 360° sweep, then smoothly transition to side view
   if (introOrbit && orbitT - introStartAngle >= Math.PI * 2) {
     introOrbit = false;
-    setView('side');
+    const cx2 = getTrainCenter();
+    introTargetPos = new THREE.Vector3(cx2, 2.8, 8.2);
+    introTargetLook = new THREE.Vector3(cx2, getTrainYCenter(), 0);
+    introTransition = true;
+    document.querySelectorAll('#views button[data-view]').forEach(x => x.classList.remove('active'));
+    const sideBtn = document.querySelector('#views button[data-view="side"]');
+    if (sideBtn) sideBtn.classList.add('active');
   }
 }
 document.querySelectorAll('#views button[data-view]').forEach(b => {

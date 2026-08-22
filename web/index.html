@@ -690,8 +690,8 @@ function revolverDrumSvg(loaded,total,s){
   let chambers='';
   for(let i=0;i<total;i++){
     const angle=(i*360/total-90)*Math.PI/180;
-    const dx=cx+Math.cos(angle)*(r*.6);
-    const dy=cy+Math.sin(angle)*(r*.6);
+    const dx=cx+Math.cos(angle)*(r*.78);
+    const dy=cy+Math.sin(angle)*(r*.78);
     const isEmpty=i<fired;
     const fill=isEmpty?'var(--bg)':'#FFD54F';
     const stroke=isEmpty?'var(--muted)':'#F9A825';
